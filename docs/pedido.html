@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Pedido Sugerido — Boali</title>
   <link rel="stylesheet" href="css/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 </head>
 <body>
   <div class="topbar">
@@ -38,6 +39,9 @@
         </table>
       </div>
       <p class="hint">Linhas com pedido sugerido = 0 têm estoque suficiente pro período.</p>
+
+      <button class="primary" id="pdf-btn">Gerar PDF (e salvar no histórico)</button>
+      <div id="pdf-msg"></div>
     </div>
   </div>
 

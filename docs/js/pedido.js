@@ -10,8 +10,11 @@ const msg = document.getElementById('msg');
 const resultadoWrap = document.getElementById('resultado-wrap');
 const periodoLabel = document.getElementById('periodo-label');
 const resultadoTbody = document.getElementById('resultado-tbody');
+const pdfBtn = document.getElementById('pdf-btn');
+const pdfMsg = document.getElementById('pdf-msg');
 
 let loja = null;
+let ultimoCalculo = null; // { dataPedido, resultados }
 
 async function carregar() {
   const { data: lojas, error: lojaErr } = await supabase
@@ -94,8 +97,99 @@ calcularBtn.addEventListener('click', async () => {
     .join('');
 
   resultadoWrap.classList.remove('hidden');
+  pdfMsg.innerHTML = '';
   calcularBtn.disabled = false;
   calcularBtn.textContent = 'Calcular pedido sugerido';
+
+  ultimoCalculo = { dataPedido, resultados };
+});
+
+pdfBtn.addEventListener('click', async () => {
+  if (!ultimoCalculo) return;
+
+  pdfBtn.disabled = true;
+  pdfBtn.textContent = 'Salvando e gerando PDF...';
+  pdfMsg.innerHTML = '';
+
+  const { dataPedido, resultados } = ultimoCalculo;
+  const validos = resultados.filter((r) => r.linha);
+
+  const registros = validos.map(({ ing, linha }) => ({
+    data_pedido: dataPedido,
+    loja_id: loja.id,
+    ingrediente_id: ing.id,
+    periodo_inicio: linha.periodo_inicio,
+    periodo_fim: linha.periodo_fim,
+    consumo_teorico_base: linha.consumo_teorico_base,
+    desperdicio_periodo: linha.desperdicio_periodo,
+    fator_sazonalidade_passada: linha.fator_sazonalidade_passada,
+    fator_sazonalidade_futura: linha.fator_sazonalidade_futura,
+    consumo_esperado: linha.consumo_esperado,
+    estoque_atual_base: linha.estoque_atual_base,
+    necessidade_bruta: linha.necessidade_bruta,
+    unidade_compra: linha.unidade_compra,
+    lote_minimo: linha.lote_minimo,
+    pedido_sugerido: linha.pedido_sugerido,
+  }));
+
+  if (registros.length) {
+    const { error } = await supabase.from('pedidos_sugeridos').insert(registros);
+    if (error) {
+      pdfMsg.innerHTML = `<div class="error">Erro ao salvar histórico: ${error.message} (PDF gerado mesmo assim)</div>`;
+    }
+  }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  let y = 15;
+
+  doc.setFontSize(14);
+  doc.text(`Pedido Sugerido — ${loja.nome}`, 14, y);
+  y += 8;
+  doc.setFontSize(10);
+  doc.text(`Data do pedido: ${dataPedido}`, 14, y);
+  y += 6;
+  if (validos.length) {
+    const l = validos[0].linha;
+    doc.text(`Período de cobertura: ${l.periodo_inicio} a ${l.periodo_fim} (${l.dias_cobertura} dias)`, 14, y);
+    y += 10;
+  }
+
+  doc.setFontSize(11);
+  doc.text('Ingrediente', 14, y);
+  doc.text('Consumo esp.', 90, y);
+  doc.text('Estoque atual', 130, y);
+  doc.text('Pedido', 172, y);
+  y += 2;
+  doc.line(14, y, 196, y);
+  y += 6;
+
+  doc.setFontSize(10);
+  for (const { ing, linha, erro } of resultados) {
+    if (y > 280) {
+      doc.addPage();
+      y = 15;
+    }
+    if (erro) {
+      doc.text(ing.nome, 14, y);
+      doc.text('erro no cálculo', 90, y);
+      y += 6;
+      continue;
+    }
+    doc.text(ing.nome, 14, y);
+    doc.text(`${Number(linha.consumo_esperado).toFixed(1)} ${ing.unidade_base}`, 90, y);
+    doc.text(`${Number(linha.estoque_atual_base).toFixed(1)} ${ing.unidade_base}`, 130, y);
+    doc.text(`${linha.pedido_sugerido} ${linha.unidade_compra}`, 172, y);
+    y += 6;
+  }
+
+  doc.save(`pedido-sugerido-${dataPedido}.pdf`);
+
+  pdfBtn.disabled = false;
+  pdfBtn.textContent = 'Gerar PDF (e salvar no histórico)';
+  if (!pdfMsg.innerHTML) {
+    pdfMsg.innerHTML = '<div class="success">Salvo no histórico e PDF gerado.</div>';
+  }
 });
 
 carregar();

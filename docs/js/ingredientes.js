@@ -82,7 +82,6 @@ function render() {
 
     const tdNome = document.createElement('td');
     const inputNome = document.createElement('input');
-    inputNome.style.width = '320px';
     inputNome.value = pend.nome ?? ing.nome;
     inputNome.addEventListener('input', () => marcarPendencia(ing, 'nome', inputNome.value));
     tdNome.appendChild(inputNome);
@@ -90,14 +89,12 @@ function render() {
     const tdPosicao = document.createElement('td');
     const inputPos = document.createElement('input');
     inputPos.type = 'number';
-    inputPos.style.width = '70px';
     inputPos.value = pend.posicao ?? ing.posicao;
     inputPos.addEventListener('input', () => marcarPendencia(ing, 'posicao', inputPos.value));
     tdPosicao.appendChild(inputPos);
 
     const tdUnidade = document.createElement('td');
     const inputUn = document.createElement('input');
-    inputUn.style.width = '80px';
     inputUn.value = pend.unidade ?? ing.unidade;
     inputUn.addEventListener('input', () => marcarPendencia(ing, 'unidade', inputUn.value));
     tdUnidade.appendChild(inputUn);

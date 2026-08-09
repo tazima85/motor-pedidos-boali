@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Contagem de Estoque — Boali</title>
   <link rel="stylesheet" href="css/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 </head>
 <body>
   <div class="topbar">
@@ -32,6 +33,7 @@
     </div>
 
     <button class="primary" id="save-btn" disabled>Salvar contagem</button>
+    <button class="secondary" id="pdf-btn">Gerar PDF da lista (folha em branco pra contar)</button>
     <div id="msg"></div>
   </div>
 
