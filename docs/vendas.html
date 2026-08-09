@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ingestão de Vendas — Boali</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="topbar">
+    <a href="index.html">&larr; Menu</a>
+    <h1>Vendas</h1>
+    <span style="width:40px;"></span>
+  </div>
+
+  <div class="page">
+    <p class="hint" id="loja-label">Carregando loja...</p>
+    <p class="hint">
+      Sobe o relatório semanal de vendas por PLU (.xlsx). O período (data início/fim) não vem
+      confiável de dentro do arquivo — informe manualmente.
+    </p>
+
+    <label for="data-inicio">Início do período</label>
+    <input type="date" id="data-inicio" />
+
+    <label for="data-fim">Fim do período</label>
+    <input type="date" id="data-fim" />
+
+    <label for="arquivo">Arquivo (.xlsx)</label>
+    <input type="file" id="arquivo" accept=".xlsx,.xls" />
+
+    <button class="primary" id="analisar-btn" disabled>Analisar arquivo</button>
+    <div id="msg"></div>
+
+    <div id="preview-wrap" class="hidden">
+      <h2>Pré-visualização</h2>
+      <p class="hint" id="preview-summary"></p>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>PLU</th>
+              <th>Nome</th>
+              <th>Qtd</th>
+              <th>Prato cadastrado?</th>
+            </tr>
+          </thead>
+          <tbody id="preview-tbody"></tbody>
+        </table>
+      </div>
+      <button class="primary" id="importar-btn">Importar linhas reconhecidas</button>
+      <div id="import-msg"></div>
+    </div>
+  </div>
+
+  <script type="module" src="js/vendas.js"></script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pedido Sugerido — Boali</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="topbar">
+    <a href="index.html">&larr; Menu</a>
+    <h1>Pedido Sugerido</h1>
+    <span style="width:40px;"></span>
+  </div>
+
+  <div class="page">
+    <p class="hint" id="loja-label">Carregando loja...</p>
+
+    <label for="data-pedido">Data do pedido (precisa ser quinta-feira)</label>
+    <input type="date" id="data-pedido" />
+
+    <button class="primary" id="calcular-btn">Calcular pedido sugerido</button>
+    <div id="msg"></div>
+
+    <div id="resultado-wrap" class="hidden">
+      <p class="hint" id="periodo-label"></p>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Ingrediente</th>
+              <th>Consumo esperado</th>
+              <th>Estoque atual</th>
+              <th>Pedido sugerido</th>
+            </tr>
+          </thead>
+          <tbody id="resultado-tbody"></tbody>
+        </table>
+      </div>
+      <p class="hint">Linhas com pedido sugerido = 0 têm estoque suficiente pro período.</p>
+    </div>
+  </div>
+
+  <script type="module" src="js/pedido.js"></script>
+</body>
+</html>

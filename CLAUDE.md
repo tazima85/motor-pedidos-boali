@@ -37,6 +37,9 @@ an incident worth reading before running `git add -A` again in this repo).
   workflow, and same-`data` ordering was previously undefined.
 - `supabase/migrations/20260809140000_modulo_5_vendas.sql` — the `vendas` table and
   `calcular_consumo_teorico_medio_diario()`; see the Módulo 5 section below.
+- `supabase/migrations/20260810120000_vendas_upsert.sql` — unique constraint on `vendas(prato_id,
+  loja_id, data_inicio, data_fim)`, needed so the vendas-upload UI can `upsert` (re-importing the same
+  period updates instead of duplicating).
 - `supabase/seed.sql` — real end-to-end data for the Frango Crocante validation: ingrediente "Frango
   Crocante" (Comfrio code `0101013100300`, `FRANGO EMPANADISSIMO CX4KG`, 1 caixa = 10 pacotes × 400g),
   the prato "Wrap Frango Picante" (the only dish where Frango Crocante is a Proteína-group option), a
@@ -169,12 +172,30 @@ package.json here either.
 - `login.html` / `js/login.js` — email+password sign-in via `supabase.auth.signInWithPassword`. No
   self-serve signup UI — accounts are provisioned via the Supabase Admin API or Dashboard (see Auth
   below).
-- `index.html` — post-login menu with two entries.
+- `index.html` — post-login menu with four entries.
 - `estoque.html` / `js/estoque.js` — Módulo 4 UI. Fetches all active `ingredientes` (joined to `setores`
   for posição), renders a client-side-sortable table (click any header to toggle asc/desc — the spec's
   explicit requirement), one numeric input per row, bulk-inserts into `contagens_estoque` on save. Falls
   back to `unidade_base` for any ingrediente that doesn't have `unidade_contagem_padrao` set yet (most
   of the stub ingredients from the seed don't).
+- `vendas.html` / `js/vendas.js` — Módulo 5 UI. Parses an uploaded `.xlsx` client-side via SheetJS
+  (`https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs`, also CDN-loaded, no npm dep). Matches columns
+  by **header text** (`PLU`, first `Nome`, exact `Qtd` — not `Qtd %`, `Valor total`, `Desconto`,
+  `Impostos`, `Líquido`), not fixed column position, so reordered columns in a future export still work.
+  De-duplicates by PLU keeping the **last** occurrence in the sheet — this is what makes the real
+  reference file's two-block quirk (see Módulo 5 section) resolve correctly without any file-specific
+  special-casing, since the correct block happens to come last. Shows a preview (matched prato vs. "não
+  cadastrado") before an explicit import step; import is an `upsert` on `(prato_id, loja_id,
+  data_inicio, data_fim)` (migration `20260810120000_vendas_upsert.sql`) so re-uploading the same period
+  updates instead of duplicating. Período (data_inicio/data_fim) is a manual date input, not parsed from
+  the file — the report's own period metadata lives in a separate sheet ("Dados de Origem") that isn't
+  reliably present across exports.
+- `pedido.html` / `js/pedido.js` — Módulo 6 UI. Date input (must be a Thursday, validated client-side
+  before calling the DB, which would reject it anyway); on submit, calls `calcular_pedido_sugerido` via
+  `supabase.rpc(...)` once per ingrediente that has `unidade_compra_fornecedor` set (in parallel via
+  `Promise.all`), renders one row per ingrediente with consumo esperado / estoque atual / pedido
+  sugerido. Per-ingrediente RPC errors (e.g. missing `unidades_conversao`) are caught and shown inline
+  per row rather than aborting the whole calculation.
 - `desperdicio.html` / `js/desperdicio.js` — Módulo 3 UI. Toggles between "prato" and "ingrediente_bruto".
   For a prato, dynamically loads its `receita_grupos_variaveis` + `receita_opcoes_variaveis` and renders
   one `<select>` per group (this is what feeds `registro_desperdicio_opcoes_selecionadas`); optional
@@ -209,8 +230,22 @@ Supabase project:
   and the `registro_desperdicio_opcoes_selecionadas` link landed correctly in the database.
 - Desperdício, ingrediente_bruto path: selecting Frango Crocante correctly repopulated the unit dropdown
   to `g`/`pacote`/`caixa`; submitted with `pacote` → confirmed in the database.
-- No console errors from the app itself (3 exceptions seen are generic Chrome-extension noise tied to
-  the login page's first load, not app code — didn't recur across any later interaction).
+- Vendas: uploaded the actual real `uploads/Vendas_PLU.xlsx` through the file input — parsed 177 unique
+  PLUs, correctly recognized exactly the 2 already-cataloged pratos (`220002`, `240004`) with the right
+  quantities (19, 67), correctly left the other 175 as "não cadastrado". Import → upsert confirmed via
+  SQL: same rows updated in place (new `created_at`), no duplicates, matching the unique constraint.
+- Pedido Sugerido: computed live for `2026-08-13`, returned the same `periodo_inicio`/`periodo_fim`/
+  `consumo_esperado`/`estoque_atual`/`pedido_sugerido` values as the direct SQL call in the Módulo 5/6
+  sections above — UI and function agree exactly.
+- No console errors from the app itself (3 exceptions seen on the login page early in this project are
+  generic Chrome-extension noise, not app code — never recurred across any interaction on any page,
+  across multiple separate test sessions).
+- One flake worth knowing: on this round of testing, `computer` tool clicks via element `ref` on
+  `analisar-btn`/`calcular-btn` didn't reliably fire the button's handler (no error, just nothing
+  happening) even though the element was correctly targeted and enabled — triggering `.click()` via
+  `javascript_tool` worked every time. Not an app bug (confirmed the DOM state was correct beforehand);
+  if UI automation seems to silently do nothing on this project again, try a JS-driven click before
+  assuming the app is broken.
 
 ### Deployment
 
@@ -241,9 +276,11 @@ though the first two files in there turned out fine to track.
 
 ### Not done yet
 
-- No UI yet for anything beyond Módulos 3/4 — Módulo 5 (vendas) and Módulo 6 (pedido sugerido) are
-  fully working in the database, but there's no page to upload/import a sales report or to view a
-  computed pedido sugerido. No ingrediente/receita cadastro screens either.
+- All six módulos now have working UI. Still missing: ingrediente/receita cadastro screens (both are
+  seeded via SQL only), and a way to view/set `fatores_sazonalidade` from the UI.
+- `vendas.html`'s PLU→prato matching requires `pratos.codigo_plu` to already be set — there's no UI to
+  set it (or to create a new prato) from the vendas screen itself, so cataloging the other 175 PLUs
+  found in the real file is still a manual SQL job.
 - `contagens_estoque` has no upsert/edit — recounting the same day always inserts a new row
   (intentional append-only log; the tie-break fix in migration 0006 makes "most recent" deterministic
   for `calcular_pedido_sugerido`, but there's no UI to see stock history yet).
