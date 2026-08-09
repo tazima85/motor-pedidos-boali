@@ -15,9 +15,14 @@
 
   <div class="page">
     <p class="hint">
-      Edite nome, posição (setor) e unidade de contagem. Toque no cabeçalho de uma coluna pra ordenar.
-      As mudanças salvam por linha, ao sair do campo ou tocar em "Salvar".
+      Edite nome, posição (setor), unidade de contagem, e marque "Ocultar" pra tirar o item da tela de
+      Contagem de Estoque (ele continua valendo pra receita/pedido). Toque no cabeçalho de uma coluna
+      pra ordenar. Nada é salvo até tocar em "Salvar alterações".
     </p>
+
+    <button class="primary" id="salvar-btn" disabled>Salvar alterações</button>
+    <div id="msg"></div>
+
     <input type="search" id="filtro" placeholder="Filtrar por nome ou código..." />
 
     <div style="overflow-x:auto;">
@@ -28,12 +33,12 @@
             <th data-key="nome">Nome <span class="arrow"></span></th>
             <th data-key="posicao">Posição <span class="arrow"></span></th>
             <th data-key="unidade">Unidade <span class="arrow"></span></th>
+            <th data-key="oculto">Ocultar <span class="arrow"></span></th>
           </tr>
         </thead>
         <tbody id="tbody"></tbody>
       </table>
     </div>
-    <div id="msg"></div>
   </div>
 
   <script type="module" src="js/ingredientes.js"></script>

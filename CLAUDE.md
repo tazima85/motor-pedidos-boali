@@ -40,6 +40,8 @@ an incident worth reading before running `git add -A` again in this repo).
 - `supabase/migrations/20260810120000_vendas_upsert.sql` — unique constraint on `vendas(prato_id,
   loja_id, data_inicio, data_fim)`, needed so the vendas-upload UI can `upsert` (re-importing the same
   period updates instead of duplicating).
+- `supabase/migrations/20260811120000_ocultar_contagem.sql` — adds `ingredientes.oculto_contagem`, a
+  column deliberately separate from `ativo` (see Frontend section) that only affects `estoque.html`.
 - `supabase/seed.sql` — real end-to-end data for the Frango Crocante validation: ingrediente "Frango
   Crocante" (Comfrio code `0101013100300`, `FRANGO EMPANADISSIMO CX4KG`, 1 caixa = 10 pacotes × 400g),
   the prato "Wrap Frango Picante" (the only dish where Frango Crocante is a Proteína-group option), a
@@ -176,12 +178,12 @@ was actually asked for.
 - `login.html` / `js/login.js` — email+password sign-in via `supabase.auth.signInWithPassword`. No
   self-serve signup UI — accounts are provisioned via the Supabase Admin API or Dashboard (see Auth
   below).
-- `index.html` — post-login menu with four entries.
-- `estoque.html` / `js/estoque.js` — Módulo 4 UI. Fetches all active `ingredientes` (joined to `setores`
-  for posição), renders a client-side-sortable table (click any header to toggle asc/desc — the spec's
-  explicit requirement), one numeric input per row, bulk-inserts into `contagens_estoque` on save. Falls
-  back to `unidade_base` for any ingrediente that doesn't have `unidade_contagem_padrao` set yet (most
-  of the stub ingredients from the seed don't).
+- `index.html` — post-login menu with five entries.
+- `estoque.html` / `js/estoque.js` — Módulo 4 UI. Fetches active, non-`oculto_contagem` `ingredientes`
+  (joined to `setores` for posição), renders a client-side-sortable table (click any header to toggle
+  asc/desc — the spec's explicit requirement), one numeric input per row, bulk-inserts into
+  `contagens_estoque` on save. Falls back to `unidade_base` for any ingrediente that doesn't have
+  `unidade_contagem_padrao` set yet (some catalog items still don't, post-PDF-import).
 - `vendas.html` / `js/vendas.js` — Módulo 5 UI. Parses an uploaded `.xlsx` client-side via SheetJS
   (`https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs`, also CDN-loaded, no npm dep). Matches columns
   by **header text** (`PLU`, first `Nome`, exact `Qtd` — not `Qtd %`, `Valor total`, `Desconto`,
@@ -206,12 +208,19 @@ was actually asked for.
   groups get a "— nenhuma —" option, required groups don't. For an ingrediente bruto, the unit dropdown
   is built from that ingrediente's real `unidades_conversao` rows plus its `unidade_base`.
 - `ingredientes.html` / `js/ingredientes.js` — catalog edit screen. Sortable/filterable table of every
-  active ingrediente with inline-editable nome, posição, and unidade de contagem (each field saves
-  independently on blur/change, not as a batch). "Posição" is modeled as `setores.ordem`, not a raw
-  column on `ingredientes` — editing it does a find-or-create on `setores` (look up a setor with that
-  `ordem`, create `Setor N` if none exists, then repoint `ingrediente.setor_id`) rather than writing a
-  number directly. Built specifically to correct the catalog-import heuristics described below — this
-  is the tool for fixing whatever the automated PDF parse got wrong, not a separate concern from it.
+  active ingrediente with inline-editable nome, posição, unidade de contagem, and an "Ocultar" checkbox.
+  **Batch save, not per-field**: edits are held in an in-memory `pendencias` map keyed by ingrediente id
+  and only written on an explicit "Salvar alterações" button at the top of the page (shows a live pending
+  count, e.g. "Salvar alterações (3)"); the first version auto-saved per field on blur with no button,
+  which the user couldn't find — this was a deliberate redesign after that feedback, not the original
+  plan. "Posição" is modeled as `setores.ordem`, not a raw column on `ingredientes` — saving it does a
+  find-or-create on `setores` (look up a setor with that `ordem`, create `Setor N` if none exists, then
+  repoint `ingrediente.setor_id`) rather than writing a number directly. "Ocultar" writes
+  `ingredientes.oculto_contagem` (migration `20260811120000_ocultar_contagem.sql`) — deliberately a
+  separate column from `ativo`: `ativo=false` would also pull the item out of desperdício/pedido
+  calculations, which isn't what "hide from the counting screen" means. Built specifically to correct
+  the catalog-import heuristics described below — this is the tool for fixing whatever the automated PDF
+  parse got wrong, not a separate concern from it.
 
 ### Ingrediente catalog import (from `uploads/CONTAGEM ESTOQUE 25.2026.pdf`)
 
@@ -282,6 +291,10 @@ Supabase project:
   (blank → `2`) and unidade (blank → `pct`) — confirmed via SQL the find-or-create-setor logic actually
   created a new `Setor 2` row and repointed `setor_id`, and `estoque.html` picked up both the new item
   count (149, up from ~14) and the edited posição on the very next load with no cache/refresh issue.
+  Separately, checked "Ocultar" on that same row, saved via the batch button, confirmed
+  `oculto_contagem = true` in the database, and confirmed `estoque.html` dropped to 148 rows with that
+  item's name absent from the page text — then reverted the flag back to `false` directly via SQL since
+  it was only a test toggle, not a real hide request for that specific item.
 - No console errors from the app itself (3 exceptions seen on the login page early in this project are
   generic Chrome-extension noise, not app code — never recurred across any interaction on any page,
   across multiple separate test sessions).

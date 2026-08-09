@@ -32,7 +32,8 @@ async function carregar() {
   const { data, error } = await supabase
     .from('ingredientes')
     .select('id, nome, unidade_contagem_padrao, unidade_base, setor:setores(ordem)')
-    .eq('ativo', true);
+    .eq('ativo', true)
+    .eq('oculto_contagem', false);
 
   if (error) {
     msg.innerHTML = `<div class="error">Erro ao carregar ingredientes: ${error.message}</div>`;

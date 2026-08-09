@@ -6,8 +6,10 @@ await requireAuth();
 const tbody = document.getElementById('tbody');
 const msg = document.getElementById('msg');
 const filtroInput = document.getElementById('filtro');
+const salvarBtn = document.getElementById('salvar-btn');
 
-let ingredientes = []; // { id, codigo, nome, posicao, unidade }
+let ingredientes = []; // { id, codigo, nome, posicao, unidade, oculto }
+const pendencias = {}; // id -> { nome?, posicao?, unidade?, oculto? }
 let sortKey = 'nome';
 let sortDir = 'asc';
 let filtro = '';
@@ -15,7 +17,7 @@ let filtro = '';
 async function carregar() {
   const { data, error } = await supabase
     .from('ingredientes')
-    .select('id, codigo_fornecedor, nome, unidade_contagem_padrao, setor:setores(ordem)')
+    .select('id, codigo_fornecedor, nome, unidade_contagem_padrao, oculto_contagem, setor:setores(ordem)')
     .eq('ativo', true);
 
   if (error) {
@@ -29,6 +31,7 @@ async function carregar() {
     nome: i.nome,
     posicao: i.setor?.ordem ?? 1,
     unidade: i.unidade_contagem_padrao ?? '',
+    oculto: i.oculto_contagem,
   }));
 
   render();
@@ -48,67 +51,17 @@ function sortLinhas(linhas) {
     const va = a[sortKey];
     const vb = b[sortKey];
     if (typeof va === 'number') return (va - vb) * dir;
+    if (typeof va === 'boolean') return (va === vb ? 0 : va ? 1 : -1) * dir;
     return String(va).localeCompare(String(vb), 'pt-BR') * dir;
   });
   return linhas;
 }
 
-async function salvarNome(ing, valor) {
-  const { error } = await supabase.from('ingredientes').update({ nome: valor }).eq('id', ing.id);
-  return error;
-}
-
-async function salvarUnidade(ing, valor) {
-  const { error } = await supabase
-    .from('ingredientes')
-    .update({ unidade_contagem_padrao: valor || null })
-    .eq('id', ing.id);
-  return error;
-}
-
-// "Posição" é modelada como setores.ordem — encontra um setor com essa
-// ordem, ou cria um novo ("Setor N"), e reatribui o ingrediente a ele.
-async function salvarPosicao(ing, valorStr) {
-  const ordem = Number(valorStr);
-  if (!Number.isFinite(ordem)) return { message: 'Posição precisa ser um número.' };
-
-  const { data: existente, error: buscaErr } = await supabase
-    .from('setores')
-    .select('id')
-    .eq('ordem', ordem)
-    .limit(1)
-    .maybeSingle();
-  if (buscaErr) return buscaErr;
-
-  let setorId = existente?.id;
-  if (!setorId) {
-    const { data: novo, error: criaErr } = await supabase
-      .from('setores')
-      .insert({ nome: `Setor ${ordem}`, ordem })
-      .select('id')
-      .single();
-    if (criaErr) return criaErr;
-    setorId = novo.id;
-  }
-
-  const { error } = await supabase.from('ingredientes').update({ setor_id: setorId }).eq('id', ing.id);
-  return error;
-}
-
-function celulaEditavel(valor, onSave) {
-  const input = document.createElement('input');
-  input.value = valor;
-  input.addEventListener('change', async () => {
-    input.disabled = true;
-    const error = await onSave(input.value);
-    input.disabled = false;
-    if (error) {
-      msg.innerHTML = `<div class="error">Erro ao salvar: ${error.message}</div>`;
-    } else {
-      msg.innerHTML = '';
-    }
-  });
-  return input;
+function marcarPendencia(ing, campo, valor) {
+  pendencias[ing.id] = pendencias[ing.id] || {};
+  pendencias[ing.id][campo] = valor;
+  salvarBtn.disabled = false;
+  salvarBtn.textContent = `Salvar alterações (${Object.keys(pendencias).length})`;
 }
 
 function render() {
@@ -122,28 +75,108 @@ function render() {
   tbody.innerHTML = '';
   for (const ing of linhas) {
     const tr = document.createElement('tr');
+    const pend = pendencias[ing.id] || {};
 
     const tdCodigo = document.createElement('td');
     tdCodigo.textContent = ing.codigo;
 
     const tdNome = document.createElement('td');
-    tdNome.appendChild(celulaEditavel(ing.nome, (v) => salvarNome(ing, v)));
+    const inputNome = document.createElement('input');
+    inputNome.value = pend.nome ?? ing.nome;
+    inputNome.addEventListener('input', () => marcarPendencia(ing, 'nome', inputNome.value));
+    tdNome.appendChild(inputNome);
 
     const tdPosicao = document.createElement('td');
-    const inputPos = celulaEditavel(ing.posicao, (v) => salvarPosicao(ing, v));
+    const inputPos = document.createElement('input');
     inputPos.type = 'number';
     inputPos.style.width = '70px';
+    inputPos.value = pend.posicao ?? ing.posicao;
+    inputPos.addEventListener('input', () => marcarPendencia(ing, 'posicao', inputPos.value));
     tdPosicao.appendChild(inputPos);
 
     const tdUnidade = document.createElement('td');
-    const inputUn = celulaEditavel(ing.unidade, (v) => salvarUnidade(ing, v));
+    const inputUn = document.createElement('input');
     inputUn.style.width = '80px';
+    inputUn.value = pend.unidade ?? ing.unidade;
+    inputUn.addEventListener('input', () => marcarPendencia(ing, 'unidade', inputUn.value));
     tdUnidade.appendChild(inputUn);
 
-    tr.append(tdCodigo, tdNome, tdPosicao, tdUnidade);
+    const tdOculto = document.createElement('td');
+    const inputOculto = document.createElement('input');
+    inputOculto.type = 'checkbox';
+    inputOculto.checked = pend.oculto ?? ing.oculto;
+    inputOculto.addEventListener('change', () => marcarPendencia(ing, 'oculto', inputOculto.checked));
+    tdOculto.appendChild(inputOculto);
+
+    tr.append(tdCodigo, tdNome, tdPosicao, tdUnidade, tdOculto);
     tbody.appendChild(tr);
   }
 }
+
+// "Posição" é modelada como setores.ordem — encontra um setor com essa
+// ordem, ou cria um novo ("Setor N"), e devolve o id pra reatribuir o
+// ingrediente a ele.
+async function resolverSetorId(ordemStr) {
+  const ordem = Number(ordemStr);
+  if (!Number.isFinite(ordem)) throw new Error('Posição precisa ser um número.');
+
+  const { data: existente, error: buscaErr } = await supabase
+    .from('setores')
+    .select('id')
+    .eq('ordem', ordem)
+    .limit(1)
+    .maybeSingle();
+  if (buscaErr) throw buscaErr;
+  if (existente) return existente.id;
+
+  const { data: novo, error: criaErr } = await supabase
+    .from('setores')
+    .insert({ nome: `Setor ${ordem}`, ordem })
+    .select('id')
+    .single();
+  if (criaErr) throw criaErr;
+  return novo.id;
+}
+
+salvarBtn.addEventListener('click', async () => {
+  const ids = Object.keys(pendencias);
+  if (!ids.length) return;
+
+  salvarBtn.disabled = true;
+  salvarBtn.textContent = 'Salvando...';
+  msg.innerHTML = '';
+
+  let erros = 0;
+  for (const id of ids) {
+    const pend = pendencias[id];
+    const update = {};
+    if (pend.nome !== undefined) update.nome = pend.nome;
+    if (pend.unidade !== undefined) update.unidade_contagem_padrao = pend.unidade || null;
+    if (pend.oculto !== undefined) update.oculto_contagem = pend.oculto;
+
+    try {
+      if (pend.posicao !== undefined) {
+        update.setor_id = await resolverSetorId(pend.posicao);
+      }
+      const { error } = await supabase.from('ingredientes').update(update).eq('id', id);
+      if (error) throw error;
+      delete pendencias[id];
+    } catch (err) {
+      erros++;
+      console.error(`Erro ao salvar ingrediente ${id}:`, err.message);
+    }
+  }
+
+  await carregar();
+
+  if (erros) {
+    msg.innerHTML = `<div class="error">${erros} item(ns) não salvos — veja o console.</div>`;
+  } else {
+    msg.innerHTML = '<div class="success">Alterações salvas com sucesso.</div>';
+  }
+  salvarBtn.disabled = Object.keys(pendencias).length === 0;
+  salvarBtn.textContent = 'Salvar alterações';
+});
 
 document.querySelectorAll('th[data-key]').forEach((th) => {
   th.addEventListener('click', () => {
