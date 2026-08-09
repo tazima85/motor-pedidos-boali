@@ -6,3 +6,13 @@
 # OS/editor noise
 .DS_Store
 Thumbs.db
+uploads/~$*
+
+# Real sales/revenue data (PLU-level quantities, discounts, taxes, net
+# revenue by loja) — landed in uploads/ from outside this conversation and
+# got swept into a commit by `git add -A` before anyone reviewed it, while
+# the repo was briefly public. Untracked now on purpose: unlike the recipe
+# matrix and the Comfrio purchase order (which are fine to keep, and are
+# actively referenced by supabase/seed.sql), this is financial data with no
+# reason to live in a repo that may go public again for GitHub Pages.
+uploads/Vendas_PLU.xlsx
