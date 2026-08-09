@@ -153,16 +153,39 @@ findings from the file changed the design from what the original spec draft assu
 
 **Update — no longer an open gap for desperdício, still open for vendas**: `receita_opcoes_variaveis
 .padrao` was left unset everywhere initially because there was no real frequency data to justify
-picking one protein over another, and guessing would quietly bias every forecast. The user later gave
-an explicit, deliberate instruction to resolve this for the Proteína grupo of Wrap Frango Picante:
-"assuma que a proteína utilizada no prato selecionado é a que consta na tabela de ingredientes por
-prato" — so `padrao = true` is now set on its Frango Crocante option (in `supabase/seed.sql`, applied
-idempotently via `update ... where padrao is distinct from true`-style guard). **This instruction was
-scoped to the desperdício flow only** (see Frontend section — `desperdicio.js` no longer shows a
-selector, it silently uses whichever option has `padrao = true`). `calcular_consumo_teorico_medio_diario`
-(Módulo 5) deliberately still does **not** read `padrao` and still contributes 0 for variable groups —
-that's a separate question (vendas vs. waste) that hasn't been asked or answered yet, don't assume the
-same "use padrao" rule applies there without it being asked for explicitly.
+picking one protein over another, and guessing would quietly bias every forecast. The user gave an
+explicit, deliberate instruction to resolve this for desperdício: "assuma que a proteína utilizada no
+prato selecionado é a que consta na tabela de ingredientes por prato" — so `padrao = true` is now set
+per prato in `supabase/seed.sql` (idempotently, via an `update` that sets `padrao` based on an
+`ingrediente_id` match rather than a blind `insert`). **Corrected once already**: the first pass wrongly
+assumed Wrap Frango Picante's padrão protein was Frango Crocante (convenient because that's what earlier
+testing happened to use, but not actually true) — the user corrected this directly: Wrap Frango
+Picante's real padrão protein is **Frango desfiado**. Current state, all confirmed live against real
+data: Wrap Frango Picante → Frango desfiado; **Wrap Crocante ao Pesto** and **Bowl da Fazenda** (two
+pratos created specifically for this, not present in the seed before) → Frango Crocante, both at 55g,
+matching the portion size used everywhere else Frango Crocante appears as a protein option. Those two
+new pratos only have a Proteína grupo — no `componentes_fixos` (base ingredients) were fabricated for
+them since that wasn't asked for, just the protein association needed to test Frango Crocante-related
+desperdício on dishes other than Wrap Frango Picante.
+
+**This whole `padrao` mechanism is scoped to the desperdício flow only** (see Frontend section —
+`desperdicio.js` no longer shows a selector, it silently uses whichever option has `padrao = true`).
+`calcular_consumo_teorico_medio_diario` (Módulo 5) deliberately still does **not** read `padrao` and
+still contributes 0 for variable groups — that's a separate question (vendas vs. waste) that hasn't been
+asked or answered yet, don't assume the same "use padrao" rule applies there without it being asked for
+explicitly.
+
+**Duplicate ingredient rows, found while fixing this — not yet cleaned up**: `ingredientes` has both
+`'Frango desfiado'` (from the original Wrap Frango Picante recipe seed) and `'FRANGO DESFIADO'` (from
+the PDF catalog import, all-caps like every other catalog row) as two separate, unlinked rows for what
+is almost certainly the same real ingredient — case-sensitive matching during the catalog import missed
+it, same root cause as the earlier "Frango crocante"/"Frango Crocante" bug, just not caught this time
+before shipping. Very likely more of these exist across the ~136-item catalog import (e.g. recipe-seed
+`'Cream cheese'` vs. catalog `'CREAM CHEESE DANUBIO'` — similar but not identical, so not a safe
+auto-merge candidate). Not fixed yet: needs a human pass to decide which pairs are really the same
+ingredient before merging (reassign `receita_componentes`/`receita_opcoes_variaveis`/etc. to one row,
+delete the other) — don't attempt an automatic merge across the whole catalog without that review, a
+wrong merge would silently corrupt a recipe.
 
 ## Frontend (`docs/`)
 
@@ -493,9 +516,10 @@ Covers all six módulos now. Key design decisions baked into the schema:
    and better than expected: the real POS report shows protein/modifier choices as their own separate
    PLU sales rather than an attribute of the base dish's sale, so `vendas` doesn't need a
    `registro_desperdicio_opcoes_selecionadas`-style link table (see Módulo 5 section).
-   `receita_opcoes_variaveis.padrao` is now set for Wrap Frango Picante's Proteína grupo (Frango
-   Crocante) and used by `desperdicio.html` — but only there. `calcular_consumo_teorico_medio_diario`
-   (Módulo 5) still ignores `padrao` and still contributes 0 for variable groups; whether Módulo 5 should
+   `receita_opcoes_variaveis.padrao` is now set (Wrap Frango Picante → Frango desfiado; Wrap Crocante ao
+   Pesto and Bowl da Fazenda → Frango Crocante) and used by `desperdicio.html` — but only there.
+   `calcular_consumo_teorico_medio_diario` (Módulo 5) still ignores `padrao` and still contributes 0 for
+   variable groups; whether Módulo 5 should
    also start using `padrao` hasn't been asked or decided.
 3. Supplier rounding/minimum-lot rules beyond simple closed-box rounding — implemented and verified
    (`ceil(necessidade / lote_minimo_compra) * lote_minimo_compra`), but only the "closed box" case has

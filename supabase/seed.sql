@@ -148,17 +148,50 @@ where p.nome = 'Wrap Frango Picante' and g.nome = 'Proteína'
     select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id
   );
 
--- Frango Crocante como opção padrão do grupo Proteína — decisão do usuário
--- (não inferida): pra desperdício de "Wrap Frango Picante", o sistema não
--- pergunta mais qual proteína foi usada, assume a que está marcada aqui.
+-- Frango Desfiado (não Frango Crocante!) como opção padrão do grupo
+-- Proteína de "Wrap Frango Picante" — corrigido pelo usuário: a associação
+-- original com Frango Crocante estava errada. Pra desperdício desse prato,
+-- o sistema não pergunta mais qual proteína foi usada, assume a marcada aqui.
 update receita_opcoes_variaveis
-set padrao = true
+set padrao = (ingrediente_id = (select id from ingredientes where nome = 'Frango desfiado'))
 where grupo_id = (
     select g.id from receita_grupos_variaveis g
     join pratos p on p.id = g.prato_id
     where p.nome = 'Wrap Frango Picante' and g.nome = 'Proteína'
-  )
-  and ingrediente_id = (select id from ingredientes where nome = 'Frango Crocante');
+  );
+
+-- ----------------------------------------------------------------------------
+-- Pratos de teste adicionais para Frango Crocante (indicados pelo usuário,
+-- não extraídos do Quadro de Receitas — "Wrap Crocante ao Pesto" não tinha
+-- valor na linha "Frango crocante" da planilha original). Modelagem mínima
+-- só para exercitar o fluxo: grupo Proteína com uma única opção (Frango
+-- Crocante, 55g — mesma quantidade usada nos demais pratos da família Wrap),
+-- marcada como padrão. Sem componentes_fixos (base do prato) — fora do
+-- escopo do que foi pedido, não inventado.
+-- ----------------------------------------------------------------------------
+
+insert into pratos (nome, tipo)
+select v.nome, 'customizavel'
+from (values ('Wrap Crocante ao Pesto'), ('Bowl da Fazenda')) as v(nome)
+where not exists (select 1 from pratos p where p.nome = v.nome);
+
+insert into receita_grupos_variaveis (prato_id, nome, obrigatorio)
+select p.id, 'Proteína', true
+from pratos p
+where p.nome in ('Wrap Crocante ao Pesto', 'Bowl da Fazenda')
+  and not exists (
+    select 1 from receita_grupos_variaveis g where g.prato_id = p.id and g.nome = 'Proteína'
+  );
+
+insert into receita_opcoes_variaveis (grupo_id, ingrediente_id, quantidade, unidade, padrao)
+select g.id, i.id, 55, 'g', true
+from receita_grupos_variaveis g
+join pratos p on p.id = g.prato_id
+join ingredientes i on i.nome = 'Frango Crocante'
+where p.nome in ('Wrap Crocante ao Pesto', 'Bowl da Fazenda') and g.nome = 'Proteína'
+  and not exists (
+    select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id
+  );
 
 -- ----------------------------------------------------------------------------
 -- Módulo 3 — Desperdício: 2 Wrap Frango Picante com Frango Crocante
