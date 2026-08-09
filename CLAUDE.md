@@ -43,16 +43,18 @@ an incident worth reading before running `git add -A` again in this repo).
 - `supabase/seed.sql` — real end-to-end data for the Frango Crocante validation: ingrediente "Frango
   Crocante" (Comfrio code `0101013100300`, `FRANGO EMPANADISSIMO CX4KG`, 1 caixa = 10 pacotes × 400g),
   the prato "Wrap Frango Picante" (the only dish where Frango Crocante is a Proteína-group option), a
-  waste record (2× the dish, decomposed via the recipe), an illustrative stock count by pacote, and a
-  real week of vendas (see Módulo 5 below). Idempotent (safe to re-run). Sourced from
-  `uploads/Quadro_Receitas_Completo_2026 (2).xlsx` (full recipe matrix), `uploads/Pedido
-  1652340949691-01.xlsx` (a real Comfrio order), and the real numbers from `uploads/Vendas_PLU.xlsx`
-  (see below — that file itself is *not* tracked in the repo). Note: unlike migrations,
+  waste record (2× the dish, decomposed via the recipe), an illustrative stock count by pacote, a real
+  week of vendas (see Módulo 5 below), **and the full ~136-item product catalog** from `uploads/CONTAGEM
+  ESTOQUE 25.2026.pdf` (see "Ingrediente catalog import" note below). Idempotent (safe to re-run).
+  Sourced from `uploads/Quadro_Receitas_Completo_2026 (2).xlsx` (full recipe matrix), `uploads/Pedido
+  1652340949691-01.xlsx` (a real Comfrio order), the real numbers from `uploads/Vendas_PLU.xlsx` (not
+  tracked — see below), and `uploads/CONTAGEM ESTOQUE 25.2026.pdf`. Note: unlike migrations,
   `supabase/seed.sql` only auto-applies on `supabase db reset` (local dev) — against a remote/linked
   project it must be run explicitly (`supabase db query --linked --file supabase/seed.sql`).
-- `uploads/` holds source spreadsheets used as reference — treat the tracked ones (Quadro de Receitas,
-  Pedido Comfrio) as read-only, not something to regenerate. `uploads/Vendas_PLU.xlsx` is deliberately
-  **not tracked** (real revenue/discount/tax figures) — see Deployment section. Any other file that
+- `uploads/` holds source spreadsheets/PDFs used as reference — treat the tracked ones (Quadro de
+  Receitas, Pedido Comfrio, Contagem Estoque PDF) as read-only, not something to regenerate.
+  `uploads/Vendas_PLU.xlsx` is deliberately **not tracked** (real revenue/discount/tax figures) — see
+  Deployment section. Any other file that
   shows up in `uploads/` from outside a Claude Code session should be treated as unreviewed until
   checked: don't let a blanket `git add -A` sweep it into a commit without looking first.
 - `docs/` — the static UI, served by GitHub Pages; see its own section below.
@@ -161,7 +163,9 @@ Static HTML/CSS/vanilla JS, no build step — matches the spec's GitHub Pages + 
 requirement directly. Lives in `docs/` (not `frontend/`) specifically because GitHub Pages can only
 serve from a repo's root or a `/docs` folder, not an arbitrary path. The Supabase JS client is loaded
 via ESM CDN (`https://esm.sh/@supabase/supabase-js@2`), not an npm dependency, so there's no
-package.json here either.
+package.json here either. `.topbar` background is Boali's brand orange, `#e15c26` (given directly by
+the user — not a guess) — only the header, not buttons or other green UI elements, since that's what
+was actually asked for.
 
 - `docs/js/supabase-client.js` — the shared client, configured with `db: { schema: 'motor_pedidos' }`
   so every query targets the right schema without repeating `.schema('motor_pedidos')` per call. Holds
@@ -201,6 +205,43 @@ package.json here either.
   one `<select>` per group (this is what feeds `registro_desperdicio_opcoes_selecionadas`); optional
   groups get a "— nenhuma —" option, required groups don't. For an ingrediente bruto, the unit dropdown
   is built from that ingrediente's real `unidades_conversao` rows plus its `unidade_base`.
+- `ingredientes.html` / `js/ingredientes.js` — catalog edit screen. Sortable/filterable table of every
+  active ingrediente with inline-editable nome, posição, and unidade de contagem (each field saves
+  independently on blur/change, not as a batch). "Posição" is modeled as `setores.ordem`, not a raw
+  column on `ingredientes` — editing it does a find-or-create on `setores` (look up a setor with that
+  `ordem`, create `Setor N` if none exists, then repoint `ingrediente.setor_id`) rather than writing a
+  number directly. Built specifically to correct the catalog-import heuristics described below — this
+  is the tool for fixing whatever the automated PDF parse got wrong, not a separate concern from it.
+
+### Ingrediente catalog import (from `uploads/CONTAGEM ESTOQUE 25.2026.pdf`)
+
+Real product list used for physical counting at the store — this is the "tabela-base de produtos"
+described in the original spec, just arriving as a PDF instead of the anticipated `produtos_boali.xlsx`
+with pre-cleaned columns. Brought the catalog from ~14 ingredientes (all sourced from a single recipe)
+to 149. Parsed by a one-off script (not checked into the repo — the resulting `INSERT` is what's in
+`supabase/seed.sql`), not something to re-derive by hand:
+
+- Each PDF line is the product description with a 13-digit Comfrio code **glued directly onto the end,
+  no separator** (e.g. `FRANGO EMPANADISSIMO CX4KG0101013100300`) — split via a trailing-13-digit regex.
+- `unidade_contagem_padrao` extracted by finding the **leftmost** recognized packaging token in the
+  remaining text (`CX`, `FD`, `GL`, `BD`, `RL`, `PCT`, `PC`, `UND`, `UN`, checked in that priority order
+  so `PCT` doesn't get misread as `PC` and `UND` doesn't get misread as `UN`) — matches the exact
+  vocabulary the original spec named. Leftmost match matters: `"CX 4PCT 1KG"` should resolve to `cx` (the
+  outer purchase unit), not `pct` (what's inside the box). Product name = everything before that token.
+  A word-boundary regex was tried first and **failed silently on ~40 items** where the unit is glued
+  directly to a following digit with no space (`CX36X120GR`) — fixed by requiring the boundary only on
+  the left side of the token, not both sides.
+- 37 of 136 items had **no recognizable unit token at all** (e.g. `"ABACAXI CONG 20X100GR- 2KG"` — no
+  `CX`/`PCT`/etc. anywhere) and imported with `unidade_contagem_padrao = null`. `unidade_base` is a
+  conservative guess (liquids → `ml`, disposables/packaging keywords → `un`, otherwise `g`) that only
+  matters once an item is actually used in a receita — nothing downstream breaks by it being wrong today.
+- Matches spec's own expectation verbatim: *"a extração de unidade de medida é uma primeira passada
+  automática e pode conter alguns itens a ajustar manualmente antes de considerar definitiva."* This
+  import is that first pass; `ingredientes.html` (above) is the correction tool, not an afterthought.
+- Items without a Comfrio code (fresh produce with no SKU: `MIX BRASIL`, `TOMATE`, `OVO IN NATURA`, etc.,
+  19 total) got sequential `TEMP-XXX` codes, per the Módulo 1 convention already established.
+- The import is keyed by `codigo_fornecedor` with a `not exists` guard, so the existing Frango Crocante
+  row (same Comfrio code, already correctly named/configured) was left untouched, not overwritten.
 
 ### Auth
 
@@ -237,6 +278,10 @@ Supabase project:
 - Pedido Sugerido: computed live for `2026-08-13`, returned the same `periodo_inicio`/`periodo_fim`/
   `consumo_esperado`/`estoque_atual`/`pedido_sugerido` values as the direct SQL call in the Módulo 5/6
   sections above — UI and function agree exactly.
+- Ingredientes: confirmed 149 rows render (matches `select count(*)`), edited a real row's posição
+  (blank → `2`) and unidade (blank → `pct`) — confirmed via SQL the find-or-create-setor logic actually
+  created a new `Setor 2` row and repointed `setor_id`, and `estoque.html` picked up both the new item
+  count (149, up from ~14) and the edited posição on the very next load with no cache/refresh issue.
 - No console errors from the app itself (3 exceptions seen on the login page early in this project are
   generic Chrome-extension noise, not app code — never recurred across any interaction on any page,
   across multiple separate test sessions).
@@ -276,8 +321,10 @@ though the first two files in there turned out fine to track.
 
 ### Not done yet
 
-- All six módulos now have working UI. Still missing: ingrediente/receita cadastro screens (both are
-  seeded via SQL only), and a way to view/set `fatores_sazonalidade` from the UI.
+- All six módulos now have working UI, including `ingredientes.html` for editing the catalog. Still
+  missing: creating a *new* ingrediente or prato from the UI (only editing existing rows), any
+  receita-editing screen (componentes/grupos/opções are SQL-only), and a way to view/set
+  `fatores_sazonalidade` from the UI.
 - `vendas.html`'s PLU→prato matching requires `pratos.codigo_plu` to already be set — there's no UI to
   set it (or to create a new prato) from the vendas screen itself, so cataloging the other 175 PLUs
   found in the real file is still a manual SQL job.

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ingredientes — Boali</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="topbar">
+    <a href="index.html">&larr; Menu</a>
+    <h1>Ingredientes</h1>
+    <span style="width:40px;"></span>
+  </div>
+
+  <div class="page">
+    <p class="hint">
+      Edite nome, posição (setor) e unidade de contagem. Toque no cabeçalho de uma coluna pra ordenar.
+      As mudanças salvam por linha, ao sair do campo ou tocar em "Salvar".
+    </p>
+    <input type="search" id="filtro" placeholder="Filtrar por nome ou código..." />
+
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th data-key="codigo">Código <span class="arrow"></span></th>
+            <th data-key="nome">Nome <span class="arrow"></span></th>
+            <th data-key="posicao">Posição <span class="arrow"></span></th>
+            <th data-key="unidade">Unidade <span class="arrow"></span></th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div id="msg"></div>
+  </div>
+
+  <script type="module" src="js/ingredientes.js"></script>
+</body>
+</html>

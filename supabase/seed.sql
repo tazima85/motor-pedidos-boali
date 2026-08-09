@@ -238,6 +238,169 @@ where l.nome = 'Boali São Carlos'
   );
 
 -- ----------------------------------------------------------------------------
+-- Módulo 4 — catálogo completo de produtos (uploads/CONTAGEM ESTOQUE 25.2026.pdf)
+--
+-- Tabela-base real da Comfrio usada na contagem física da loja. Extração
+-- automática de nome/unidade a partir do texto do PDF (código de 13
+-- dígitos colado ao fim do nome do produto, sem separador) — primeira
+-- passada, tal como o spec original já previa ("pode conter alguns itens
+-- a ajustar manualmente antes de considerar definitiva"). Use a tela
+-- ingredientes.html pra corrigir nome/unidade/posição depois de revisar.
+-- unidade_contagem_padrao nulo = nenhum token de unidade reconhecível no
+-- texto original (ex. "ABACAXI CONG 20X100GR- 2KG") — completar na mão.
+-- Itens sem código de fornecedor (hortifruti fresco, sem SKU Comfrio) usam
+-- TEMP-XXX, seguindo a convenção do Módulo 1.
+--
+-- unidade_base é um chute conservador (a maioria em 'g'; 'ml' para líquidos
+-- óbvios; 'un' para descartáveis/embalagens) — só importa de verdade quando
+-- o item entrar numa receita; não bloqueia nada até lá.
+-- ----------------------------------------------------------------------------
+
+insert into ingredientes (codigo_fornecedor, nome, unidade_base, unidade_contagem_padrao)
+select v.codigo, v.nome, v.unidade_base, v.unidade_contagem
+from (values
+  ('0101013100028', 'FILE FRANGO GRELHAD', 'g', 'cx'),
+  ('0101013100026', 'FRANGO DESFIADO', 'g', 'cx'),
+  ('0101013100300', 'FRANGO EMPANADISSIMO', 'g', 'cx'),
+  ('0101013100192', 'CARNE DESFIADA BOVINA', 'g', 'cx'),
+  ('0101013100101', 'BROWNIE CHOCOLATE', 'g', 'cx'),
+  ('0101013100100', 'COOKIE DE CHOCOLATE', 'g', 'cx'),
+  ('0101013100188', 'ABACAXI CONG 20X100GR- 2KG', 'g', null),
+  ('0101013100055', 'ACAI FROOTY', 'ml', 'bd'),
+  ('0101013100060', 'BROCOLIS GRANO', 'g', 'pct'),
+  ('0101013100307', 'ESPINAFRE FOLHA', 'g', 'pct'),
+  ('0101013100190', 'FRUTAS VERMELHAS CONG 20X100GR- 2KG', 'g', null),
+  ('0101013100186', 'LIMAO CONG 20X100G', 'g', null),
+  ('0101013100189', 'MANGA CONG 20X100GR - 2KG', 'g', null),
+  ('0101013100185', 'MARACUJA CONG 20X100GR- 2KG', 'g', null),
+  ('0101013100139', 'MILHO DOCE', 'g', 'pct'),
+  ('0101013100187', 'MORANGO CONG 20X100GR- 2KG', 'g', null),
+  ('0101013100056', 'PITAYA FROOTY', 'ml', 'bd'),
+  ('0101013100239', 'POLPA DE AVOCADO', 'g', 'cx'),
+  ('0101013100398', 'BRIGADEIRO', 'g', 'cx'),
+  ('0101013100380', 'CANJA DE QUINOA', 'g', 'cx'),
+  ('0101013100399', 'EMPANADA MISTA', 'g', 'cx'),
+  ('0101013100400', 'FALAFEL', 'g', 'cx'),
+  ('0101013100249', 'HOMUS DERBAK', 'g', 'cx'),
+  ('0101013100022', 'MOLHO PESTO', 'g', 'cx'),
+  ('0101013100397', 'TORTINHA DE MACA', 'g', 'cx'),
+  ('0101013100230', 'CIABATTA PRE ASSADO', 'g', 'cx'),
+  ('0101013100316', 'PAO D/BAT INT PERU C/CR', 'g', 'cx'),
+  ('0101013100415', 'PAO DE QUEIJO BOALI 12PCT 8UN', 'g', null),
+  ('0101013100110', 'TORTILLA TRIGO INTEG', 'g', 'cx'),
+  ('0101013100365', 'SALMAO CONG CUBOS', 'g', 'cx'),
+  ('0101013100207', 'OVO DE CODORNA CONS.', 'g', 'pct'),
+  ('0101013100118', 'CREAM CHEESE DANUBIO', 'g', 'cx'),
+  ('0101013100070', 'MUSSARELA DE BUFALA', 'g', 'bd'),
+  ('0101013100325', 'MUSSARELA FIORLAT', 'g', 'pc'),
+  ('0101013100119', 'QJO GORGONZOLA VIGOR', 'g', 'pc'),
+  ('0101013100409', 'QJO PARMESAO BURITIS', 'g', 'pc'),
+  ('0101013100410', 'RICOTA FRESCA BURITIS APROX 400GR', 'g', null),
+  ('0101013100387', 'KOMBUCHA FRUTAS VERMELHAS', 'g', 'fd'),
+  ('0101013100214', 'ACUCAR GUARANI', 'g', 'cx'),
+  ('0101013100215', 'ADOCANTE SUCRALOSE', 'g', 'cx'),
+  ('0101013100216', 'SAL SACHE', 'g', 'cx'),
+  ('0101013100376', 'CHIPS DE COCO FLOWPACK', 'g', 'cx'),
+  ('0101013100052', 'CHIPS MIX BATAT DOCE', 'g', 'cx'),
+  ('0101013100240', 'COLHER MESA OGMA 6', 'un', 'pc'),
+  ('0101013100385', 'CHA GASEIFICADO HIBISCO MORAN', 'g', 'fd'),
+  ('0101013100384', 'REFR. DEVI GUARANA ACAI', 'g', 'fd'),
+  ('0101013100382', 'REFR. DEVI LIMAO SICILIANO', 'g', 'fd'),
+  ('0101013100277', 'SUCO LARANJA', 'g', 'fd'),
+  ('0101013100080', 'SUCO UVA E MACA', 'g', 'fd'),
+  ('0101013100121', 'WEWI GUARANA ORG', 'g', 'fd'),
+  ('0101013100123', 'WEWI GUARANA ZERO', 'g', 'fd'),
+  ('0101013100077', 'AZEITONA PRETA FAT', 'g', 'cx'),
+  ('0101013100248', 'CEBOLA CRISPY', 'g', 'cx'),
+  ('0101013100324', 'PALMITO PUP PICADO', 'g', 'cx'),
+  ('0101013100000', 'BOBINA PLAST PIC 20X30', 'un', 'un'),
+  ('0101013100232', 'BOBINA TERMICA BOALI', 'un', 'cx'),
+  ('0101013100369', 'CANUDO BIO 10MM', 'un', 'cx'),
+  ('0101013100290', 'COPO 330 ML BOALI', 'un', 'cx'),
+  ('0101013100203', 'COPO 440ML BOALI', 'un', 'cx'),
+  ('0101013100105', 'ETIQUETA BROWNIE', 'un', 'rl'),
+  ('0101013100106', 'ETIQUETA COOKIE', 'un', 'rl'),
+  ('0101013100103', 'ETIQUETA DELIVERY', 'un', 'rl'),
+  ('0101013100102', 'ETIQUETA VALIDADE', 'un', 'rl'),
+  ('0101013100318', 'ETIQUETAS CHIPS', 'un', 'rl'),
+  ('0101013100250', 'FOLHA DUOFRESH', 'un', 'cx'),
+  ('0101013100144', 'GARRAFA PET 500 ML', 'un', 'fd'),
+  ('0101013100116', 'GUARDANAPO 40X15', 'un', 'cx'),
+  ('0101013100117', 'LAMINA WRAP LIS', 'un', 'cx'),
+  ('0101013100003', 'LUVA DESC', 'un', 'pct'),
+  ('0101013100004', 'PANO MULTIUSO', 'un', 'pct'),
+  ('0101013100005', 'PAPEL TOALHA BRANCO', 'un', 'pct'),
+  ('0101013100342', 'PORTA TALHER 25X7CM', 'un', 'pct'),
+  ('0101013100401', 'POTE P/ MOLHOS BOALI 60ML', 'un', 'cx'),
+  ('0101013100006', 'REDE CABELO PRETA', 'un', 'pct'),
+  ('0101013100007', 'ROLO FILME PVC 40CM', 'un', 'un'),
+  ('0101013100008', 'SACO COOKIE E PROT', 'un', 'pct'),
+  ('0101013100349', 'SACO G BOALI', 'un', 'pct'),
+  ('0101013100009', 'SACO LIXO PRETO 200LT', 'un', 'pct'),
+  ('0101013100343', 'SACO M BOALI', 'un', 'pct'),
+  ('0101013100363', 'TAMPA COPO 440ML', 'un', 'cx'),
+  ('0101013100330', 'COOKIE PROTEICO', 'g', 'cx'),
+  ('0101013100361', 'PACOCA ZERO ACUCAR BOALI DISPLAY 24', 'g', 'un'),
+  ('0101013100073', 'AMENDOA', 'g', 'pct'),
+  ('0101013100407', 'ARROZ MIX BOALI', 'g', 'pct'),
+  ('0101013100371', 'GERGELIM ESCURO', 'g', 'pct'),
+  ('0101013100362', 'BEBIDA DE AVEIA NUDE BARISTA 1L', 'ml', null),
+  ('0101013100151', 'MOLHO ARABE', 'g', 'cx'),
+  ('0101013100299', 'MOLHO BUFALLO RANCH', 'g', 'cx'),
+  ('0101013100154', 'MOLHO CAESAR', 'g', 'cx'),
+  ('0101013100340', 'MOLHO HONEY MUSTARD', 'g', 'cx'),
+  ('0101013100176', 'MOLHO LIMAO AZEITE', 'g', 'cx'),
+  ('0101013100328', 'AZEITE OLIV EV GALLO', 'ml', 'gl'),
+  ('0101013100273', 'BANANINHA ZR ACUCAR 04X32X23G', 'g', null),
+  ('0101013100408', 'BARRA CHOC CARAM FLOR DE SAL', 'g', 'cx'),
+  ('0101013100346', 'BOWL BOALI 1L', 'ml', 'cx'),
+  ('0101013100347', 'BOWL BOALI 500ML', 'g', 'cx'),
+  ('0101013100345', 'CAIXA WRAP BOALI', 'g', 'pct'),
+  ('0101013100243', 'FACA CHURR OGMA 6', 'un', 'pc'),
+  ('0101013100075', 'FROOTIVA ACAI MACA', 'g', 'pct'),
+  ('0101013100241', 'GARFO MESA OGMA 6', 'un', 'pc'),
+  ('0101013100350', 'PAPEL BANDEJA', 'un', 'pct'),
+  ('0101013100413', 'PINATI BANANA CHOC DISPLAY 32UN', 'g', null),
+  ('0101013100334', 'PIPOC CARA. FLOR SAL', 'g', 'cx'),
+  ('0101013100335', 'PIPOC PARMES AZEITE', 'g', 'cx'),
+  ('0101013100358', 'PUSH MATCHA 120G', 'g', null),
+  ('0101013100352', 'TAMPA BOWL 1L', 'un', 'cx'),
+  ('0101013100351', 'TAMPA BOWL 500 ML', 'un', 'cx'),
+  ('0101013100378', 'WHEY BAUNILHA 100% PURE POTE 900G', 'un', null),
+  ('0101013100360', 'CROUTON INTEGRAL', 'g', 'cx'),
+  ('0101013100406', 'MACARRAO FUSILLI SUPERIORE 500GR', 'g', 'fd'),
+  ('0101013100002', 'ESPONJA DUPLA FACE', 'un', 'pct'),
+  ('0101013100357', 'GEL HIGIENIZADOR 4X500ML', 'g', null),
+  ('0101013100042', 'KAY OV LIMP FORNO TURB 1LT', 'g', null),
+  ('0101013100355', 'KAY QSR DET CONCENT SP BB 2L', 'ml', null),
+  ('0101013100353', 'KAY QSR VIDRO E MULTIUSO BB 2L', 'ml', null),
+  ('0101013100041', 'KAY-5 SANITIZANTE', 'g', 'bd'),
+  ('0101013100356', 'QSR SAB LIQ ANTISSEPT 4X500ML', 'g', null),
+  ('TEMP-001', 'EXTRATO DE TOMATE', 'g', null),
+  ('TEMP-002', 'VINAGRE DE MAÇA', 'g', null),
+  ('TEMP-003', 'FEIJÃO COM FAROFA DE AMÊNDOAS', 'g', null),
+  ('TEMP-004', 'GERGELIM PRETO', 'g', null),
+  ('TEMP-005', 'MOLHO POKE', 'g', null),
+  ('TEMP-006', 'MOLHO TERIRIAKY', 'g', null),
+  ('TEMP-007', 'MIX BRASIL', 'g', null),
+  ('TEMP-008', 'MIX DE VERDES', 'g', null),
+  ('TEMP-009', 'ALFACE AMERICANA', 'g', null),
+  ('TEMP-010', 'CENOURA RALADA', 'g', null),
+  ('TEMP-011', 'CENOURA PALITO', 'g', null),
+  ('TEMP-012', 'TOMATE', 'g', null),
+  ('TEMP-013', 'PEPINO', 'g', null),
+  ('TEMP-014', 'HORTELÃ', 'g', null),
+  ('TEMP-015', 'ALHO EM PÓ', 'g', null),
+  ('TEMP-016', 'GENGIBRE EM PÓ', 'g', null),
+  ('TEMP-017', 'AGUA SEM GAS', 'g', null),
+  ('TEMP-018', 'AGUA COM GAS', 'g', null),
+  ('TEMP-019', 'OVO IN NATURA', 'g', null)
+) as v(codigo, nome, unidade_base, unidade_contagem)
+where not exists (
+  select 1 from ingredientes i where i.codigo_fornecedor = v.codigo
+);
+
+-- ----------------------------------------------------------------------------
 -- Verificação manual (não faz parte do seed — só para conferir o resultado):
 --
 -- -- estoque atual de Frango Crocante convertido para a unidade base (g)
