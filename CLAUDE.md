@@ -15,8 +15,9 @@ to be pure data population; the calculation logic should not need to change.
 ## Current state
 
 Schema + seed + Módulo 6 engine + a working static frontend, all verified against the real hosted
-project. No Módulo 5 (vendas), no package.json/build tooling (frontend is plain HTML/CSS/JS, no bundler
-by design — see Frontend section), and this directory is not yet a git repository.
+project, pushed to GitHub and live on GitHub Pages. No Módulo 5 (vendas), no package.json/build tooling
+(frontend is plain HTML/CSS/JS, no bundler by design — see Frontend section). Private repo:
+`tazima85/motor-pedidos-boali`.
 
 - `supabase/migrations/20260807120000_modulos_1_a_4.sql` — Módulos 1-4 schema.
 - `supabase/migrations/20260807120100_customizacao_desperdicio.sql` — adds
@@ -43,7 +44,7 @@ by design — see Frontend section), and this directory is not yet a git reposit
   remote/linked project it must be run explicitly (`supabase db query --linked --file supabase/seed.sql`).
 - `uploads/` holds the source spreadsheets referenced above — treat them as read-only reference data,
   not something to regenerate.
-- `frontend/` — the static UI; see its own section below.
+- `docs/` — the static UI, served by GitHub Pages; see its own section below.
 
 **Note**: manual browser testing of the frontend (see below) added a few extra rows beyond the seed —
 one more `contagens_estoque` count (8 pacotes, today) and two more `registros_desperdicio` (3× and 1×
@@ -88,17 +89,19 @@ real seeded data and has been verified live against the database:
   and arrival (Monday) — the spec's own formula doesn't split that out either. Revisit if this proves
   material in practice.
 
-## Frontend (`frontend/`)
+## Frontend (`docs/`)
 
 Static HTML/CSS/vanilla JS, no build step — matches the spec's GitHub Pages + client-side-only
-requirement directly. The Supabase JS client is loaded via ESM CDN (`https://esm.sh/@supabase/supabase-js@2`),
-not an npm dependency, so there's no package.json here either.
+requirement directly. Lives in `docs/` (not `frontend/`) specifically because GitHub Pages can only
+serve from a repo's root or a `/docs` folder, not an arbitrary path. The Supabase JS client is loaded
+via ESM CDN (`https://esm.sh/@supabase/supabase-js@2`), not an npm dependency, so there's no
+package.json here either.
 
-- `frontend/js/supabase-client.js` — the shared client, configured with `db: { schema: 'motor_pedidos' }`
+- `docs/js/supabase-client.js` — the shared client, configured with `db: { schema: 'motor_pedidos' }`
   so every query targets the right schema without repeating `.schema('motor_pedidos')` per call. Holds
   the project's anon key inline — intentional, anon keys are meant to be public; RLS is what actually
   protects data.
-- `frontend/js/auth-guard.js` — `requireAuth()` (redirects to `login.html` if no session) and `logout()`,
+- `docs/js/auth-guard.js` — `requireAuth()` (redirects to `login.html` if no session) and `logout()`,
   imported by every page except `login.html` itself.
 - `login.html` / `js/login.js` — email+password sign-in via `supabase.auth.signInWithPassword`. No
   self-serve signup UI — accounts are provisioned via the Supabase Admin API or Dashboard (see Auth
@@ -131,7 +134,7 @@ email):
 ### Verified live in-browser (not just visually)
 
 Every page was exercised through an actual Chrome session against `http://localhost:5500` (served via
-`npx serve frontend`, since `type="module"` imports need an HTTP origin, not `file://`) and the real
+`npx serve docs`, since `type="module"` imports need an HTTP origin, not `file://`) and the real
 Supabase project:
 
 - Login → menu redirect works with the real staff account.
@@ -146,11 +149,19 @@ Supabase project:
 - No console errors from the app itself (3 exceptions seen are generic Chrome-extension noise tied to
   the login page's first load, not app code — didn't recur across any later interaction).
 
+### Deployment
+
+Pushed to a **private** GitHub repo (`tazima85/motor-pedidos-boali`) with GitHub Pages enabled, source
+`master` branch `/docs`. Deliberate tradeoff, decided with the user: the repo being private does **not**
+make the published Pages site private — GitHub only restricts Pages visibility on Enterprise plans, so
+`https://tazima85.github.io/motor-pedidos-boali/` is reachable by anyone with the URL. Supabase Auth +
+RLS is the actual access boundary (no session → login screen only, no data reachable), not repo/URL
+secrecy. If that stops being an acceptable tradeoff, moving to a host with real access control
+(password-protected Netlify/Vercel deploy, etc.) is the fix — not just re-privating something that was
+already effectively public.
+
 ### Not done yet
 
-- Not deployed to GitHub Pages — this directory isn't a git repository yet, so there's no GitHub remote
-  to publish to. `frontend/` is deploy-ready as static files; any static host works, GitHub Pages just
-  needs the repo to exist first.
 - No UI yet for anything beyond Módulos 3/4 — no vendas, no pedido-sugerido display, no
   ingrediente/receita cadastro screens.
 - `contagens_estoque` has no upsert/edit — recounting the same day always inserts a new row
