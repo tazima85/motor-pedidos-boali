@@ -1,0 +1,190 @@
+import { supabase } from './supabase-client.js';
+import { requireAuth } from './auth-guard.js';
+
+await requireAuth();
+
+const lojaLabel = document.getElementById('loja-label');
+const form = document.getElementById('form');
+const tipoPerdaSel = document.getElementById('tipo-perda');
+const blocoPrato = document.getElementById('bloco-prato');
+const blocoIngrediente = document.getElementById('bloco-ingrediente');
+const pratoSel = document.getElementById('prato');
+const gruposDiv = document.getElementById('grupos-variaveis');
+const ingredienteSel = document.getElementById('ingrediente');
+const unidadeIngredienteSel = document.getElementById('unidade-ingrediente');
+const submitBtn = document.getElementById('submit-btn');
+const msg = document.getElementById('msg');
+
+let loja = null;
+let ingredientesPorId = {};
+
+async function carregar() {
+  const { data: lojas, error: lojaErr } = await supabase
+    .from('lojas').select('id, nome').eq('ativa', true).limit(1);
+
+  if (lojaErr || !lojas || lojas.length === 0) {
+    lojaLabel.textContent = 'Não foi possível identificar a loja.';
+    lojaLabel.className = 'error';
+    return;
+  }
+  loja = lojas[0];
+  lojaLabel.textContent = `Loja: ${loja.nome}`;
+
+  const [{ data: pratos, error: pratosErr }, { data: ingredientes, error: ingErr }] = await Promise.all([
+    supabase.from('pratos').select('id, nome').eq('ativo', true).order('nome'),
+    supabase.from('ingredientes').select('id, nome, unidade_base').eq('ativo', true).order('nome'),
+  ]);
+
+  if (pratosErr || ingErr) {
+    msg.innerHTML = `<div class="error">Erro ao carregar dados: ${(pratosErr || ingErr).message}</div>`;
+    return;
+  }
+
+  pratoSel.innerHTML = pratos.map((p) => `<option value="${p.id}">${p.nome}</option>`).join('');
+  ingredienteSel.innerHTML = ingredientes.map((i) => `<option value="${i.id}">${i.nome}</option>`).join('');
+  ingredientesPorId = Object.fromEntries(ingredientes.map((i) => [i.id, i]));
+
+  if (pratos.length) await carregarGruposDoPrato(pratos[0].id);
+  if (ingredientes.length) await carregarUnidadesDoIngrediente(ingredientes[0].id);
+}
+
+async function carregarGruposDoPrato(pratoId) {
+  gruposDiv.innerHTML = '<p class="hint">Carregando opções...</p>';
+
+  const { data: grupos, error } = await supabase
+    .from('receita_grupos_variaveis')
+    .select('id, nome, obrigatorio')
+    .eq('prato_id', pratoId)
+    .order('nome');
+
+  if (error) {
+    gruposDiv.innerHTML = `<div class="error">Erro ao carregar grupos: ${error.message}</div>`;
+    return;
+  }
+
+  if (!grupos.length) {
+    gruposDiv.innerHTML = '';
+    return;
+  }
+
+  gruposDiv.innerHTML = '';
+  for (const grupo of grupos) {
+    const { data: opcoes, error: opErr } = await supabase
+      .from('receita_opcoes_variaveis')
+      .select('id, quantidade, unidade, ingrediente:ingredientes(nome)')
+      .eq('grupo_id', grupo.id)
+      .order('id');
+
+    const label = document.createElement('label');
+    label.textContent = grupo.nome + (grupo.obrigatorio ? '' : ' (opcional)');
+
+    const select = document.createElement('select');
+    select.dataset.grupoId = grupo.id;
+    select.dataset.grupoObrigatorio = grupo.obrigatorio;
+
+    const options = [];
+    if (!grupo.obrigatorio) options.push('<option value="">— nenhuma —</option>');
+    if (!opErr) {
+      for (const op of opcoes) {
+        options.push(`<option value="${op.id}">${op.ingrediente.nome} (${op.quantidade}${op.unidade})</option>`);
+      }
+    }
+    select.innerHTML = options.join('');
+
+    gruposDiv.append(label, select);
+  }
+}
+
+async function carregarUnidadesDoIngrediente(ingredienteId) {
+  const ing = ingredientesPorId[ingredienteId];
+  const { data: conversoes, error } = await supabase
+    .from('unidades_conversao')
+    .select('unidade')
+    .eq('ingrediente_id', ingredienteId);
+
+  const unidades = new Set([ing.unidade_base]);
+  if (!error) for (const c of conversoes) unidades.add(c.unidade);
+
+  unidadeIngredienteSel.innerHTML = [...unidades]
+    .map((u) => `<option value="${u}">${u}</option>`)
+    .join('');
+}
+
+tipoPerdaSel.addEventListener('change', () => {
+  const isPrato = tipoPerdaSel.value === 'prato';
+  blocoPrato.classList.toggle('hidden', !isPrato);
+  blocoIngrediente.classList.toggle('hidden', isPrato);
+});
+
+pratoSel.addEventListener('change', () => carregarGruposDoPrato(pratoSel.value));
+ingredienteSel.addEventListener('change', () => carregarUnidadesDoIngrediente(ingredienteSel.value));
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  msg.innerHTML = '';
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Registrando...';
+
+  const hoje = new Date().toISOString().slice(0, 10);
+  const motivo = document.getElementById('motivo').value || null;
+  const tipoPerda = tipoPerdaSel.value;
+
+  try {
+    if (tipoPerda === 'prato') {
+      const quantidade = Number(document.getElementById('qtd-prato').value);
+      const { data: registro, error } = await supabase
+        .from('registros_desperdicio')
+        .insert({
+          data: hoje,
+          loja_id: loja.id,
+          tipo_perda: 'prato',
+          prato_id: pratoSel.value,
+          quantidade,
+          unidade: 'un',
+          motivo,
+        })
+        .select('id')
+        .single();
+
+      if (error) throw error;
+
+      const selecoes = [...gruposDiv.querySelectorAll('select')]
+        .filter((s) => s.value)
+        .map((s) => ({
+          registro_desperdicio_id: registro.id,
+          grupo_id: s.dataset.grupoId,
+          opcao_id: s.value,
+        }));
+
+      if (selecoes.length) {
+        const { error: selErr } = await supabase
+          .from('registro_desperdicio_opcoes_selecionadas')
+          .insert(selecoes);
+        if (selErr) throw selErr;
+      }
+    } else {
+      const quantidade = Number(document.getElementById('qtd-ingrediente').value);
+      const { error } = await supabase.from('registros_desperdicio').insert({
+        data: hoje,
+        loja_id: loja.id,
+        tipo_perda: 'ingrediente_bruto',
+        ingrediente_id: ingredienteSel.value,
+        quantidade,
+        unidade: unidadeIngredienteSel.value,
+        motivo,
+      });
+      if (error) throw error;
+    }
+
+    msg.innerHTML = '<div class="success">Perda registrada com sucesso.</div>';
+    form.reset();
+    tipoPerdaSel.dispatchEvent(new Event('change'));
+  } catch (err) {
+    msg.innerHTML = `<div class="error">Erro ao registrar: ${err.message}</div>`;
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Registrar perda';
+  }
+});
+
+carregar();

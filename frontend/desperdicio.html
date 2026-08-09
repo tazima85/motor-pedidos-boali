@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Registro de Desperdício — Boali</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="topbar">
+    <a href="index.html">&larr; Menu</a>
+    <h1>Desperdício</h1>
+    <span style="width:40px;"></span>
+  </div>
+
+  <div class="page">
+    <p class="hint" id="loja-label">Carregando loja...</p>
+
+    <form id="form">
+      <label for="tipo-perda">O que foi perdido?</label>
+      <select id="tipo-perda">
+        <option value="prato">Prato pronto</option>
+        <option value="ingrediente_bruto">Ingrediente bruto</option>
+      </select>
+
+      <div id="bloco-prato">
+        <label for="prato">Prato</label>
+        <select id="prato"></select>
+
+        <div id="grupos-variaveis"></div>
+
+        <label for="qtd-prato">Quantas unidades?</label>
+        <input type="number" id="qtd-prato" min="1" step="1" value="1" />
+      </div>
+
+      <div id="bloco-ingrediente" class="hidden">
+        <label for="ingrediente">Ingrediente</label>
+        <select id="ingrediente"></select>
+
+        <label for="qtd-ingrediente">Quantidade</label>
+        <input type="number" id="qtd-ingrediente" min="0" step="any" />
+
+        <label for="unidade-ingrediente">Unidade</label>
+        <select id="unidade-ingrediente"></select>
+      </div>
+
+      <label for="motivo">Motivo (opcional)</label>
+      <select id="motivo">
+        <option value="">— não informado —</option>
+        <option value="validade_vencida">Validade vencida</option>
+        <option value="erro_preparo">Erro de preparo</option>
+        <option value="queda_acidente">Queda / acidente</option>
+        <option value="outro">Outro</option>
+      </select>
+
+      <button type="submit" class="primary" id="submit-btn">Registrar perda</button>
+      <div id="msg"></div>
+    </form>
+  </div>
+
+  <script type="module" src="js/desperdicio.js"></script>
+</body>
+</html>

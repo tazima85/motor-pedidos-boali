@@ -1,0 +1,4 @@
+# Supabase CLI local state — project ref/pooler host, no secrets, but not meant to be committed.
+.temp
+.env
+.env.local

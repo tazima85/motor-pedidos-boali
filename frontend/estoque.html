@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Contagem de Estoque — Boali</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="topbar">
+    <a href="index.html">&larr; Menu</a>
+    <h1>Contagem de Estoque</h1>
+    <span style="width:40px;"></span>
+  </div>
+
+  <div class="page">
+    <p class="hint" id="loja-label">Carregando loja...</p>
+    <p class="hint">Toque no cabeçalho de uma coluna pra ordenar por ela. Preencha só os itens que forem contados agora.</p>
+
+    <div id="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th data-key="posicao">Posição <span class="arrow"></span></th>
+            <th data-key="nome">Produto <span class="arrow"></span></th>
+            <th data-key="unidade">Unid. <span class="arrow"></span></th>
+            <th>Contagem</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+
+    <button class="primary" id="save-btn" disabled>Salvar contagem</button>
+    <div id="msg"></div>
+  </div>
+
+  <script type="module" src="js/estoque.js"></script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+# Claude Code local permission/audit log — has held plaintext API tokens and
+# passwords used during this session (Supabase access token, anon/service_role
+# keys, staff account password). Never commit this.
+.claude/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
