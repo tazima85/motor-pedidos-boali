@@ -151,13 +151,18 @@ findings from the file changed the design from what the original spec draft assu
   `componente_fixo` contribution is the 67× "Proteína Extra" sale → `67 × 70g / 28 dias = 167.5g/dia`,
   matching the function's output exactly.
 
-**Open gap, not fabricated**: `receita_opcoes_variaveis.padrao` (the flag meant to mark a fallback
-"assumed" option per group, per the original spec's "distribuição média" idea) is not set to `true` on
-any option yet, for any grupo — there's no real frequency data yet to justify picking one protein over
-another as "the default," and marking one arbitrarily would quietly bias every future forecast. Until
-real choice-frequency data exists (or the business states a deliberate assumption), Wrap Frango
-Picante's own protein simply contributes 0 to consumo teórico from `vendas` — only its BASE components
-and any separately-sold modifier PLUs (like the Proteína Extra prato) are counted.
+**Update — no longer an open gap for desperdício, still open for vendas**: `receita_opcoes_variaveis
+.padrao` was left unset everywhere initially because there was no real frequency data to justify
+picking one protein over another, and guessing would quietly bias every forecast. The user later gave
+an explicit, deliberate instruction to resolve this for the Proteína grupo of Wrap Frango Picante:
+"assuma que a proteína utilizada no prato selecionado é a que consta na tabela de ingredientes por
+prato" — so `padrao = true` is now set on its Frango Crocante option (in `supabase/seed.sql`, applied
+idempotently via `update ... where padrao is distinct from true`-style guard). **This instruction was
+scoped to the desperdício flow only** (see Frontend section — `desperdicio.js` no longer shows a
+selector, it silently uses whichever option has `padrao = true`). `calcular_consumo_teorico_medio_diario`
+(Módulo 5) deliberately still does **not** read `padrao` and still contributes 0 for variable groups —
+that's a separate question (vendas vs. waste) that hasn't been asked or answered yet, don't assume the
+same "use padrao" rule applies there without it being asked for explicitly.
 
 ## Frontend (`docs/`)
 
@@ -208,10 +213,15 @@ was actually asked for.
   RPC's return columns, so it's fetched separately in the same `ingredientes` query used for the RPC
   parameters.
 - `desperdicio.html` / `js/desperdicio.js` — Módulo 3 UI. Toggles between "prato" and "ingrediente_bruto".
-  For a prato, dynamically loads its `receita_grupos_variaveis` + `receita_opcoes_variaveis` and renders
-  one `<select>` per group (this is what feeds `registro_desperdicio_opcoes_selecionadas`); optional
-  groups get a "— nenhuma —" option, required groups don't. For an ingrediente bruto, the unit dropdown
-  is built from that ingrediente's real `unidades_conversao` rows plus its `unidade_base`. Below the
+  For a prato, **does not ask which variable-group option (e.g. proteína) was used** — per explicit user
+  instruction, it silently looks up whichever `receita_opcoes_variaveis` row has `padrao = true` for each
+  of the prato's `receita_grupos_variaveis` and links that automatically on submit (a read-only line like
+  "Proteína: Frango Crocante (assumido pela receita)" is shown for transparency, not as an input). A
+  grupo with no `padrao` option set shows "nenhuma opção padrão definida ainda — não será registrada" and
+  is silently skipped, same failure mode as everywhere else `padrao` is used. This *replaced* an earlier
+  version with one `<select>` per grupo that let the user pick — removed on request, not layered on top.
+  For an ingrediente bruto, the unit dropdown is built from that ingrediente's real `unidades_conversao`
+  rows plus its `unidade_base`. Below the
   form, a table lists the loja's last 10 `registros_desperdicio` (data, item — prato or ingrediente name,
   whichever is set — quantidade+unidade, motivo mapped to a readable label), refreshed on page load and
   again right after a successful submit.
@@ -482,11 +492,11 @@ Covers all six módulos now. Key design decisions baked into the schema:
 2. How the sales system represents customized dishes — resolved differently than originally assumed,
    and better than expected: the real POS report shows protein/modifier choices as their own separate
    PLU sales rather than an attribute of the base dish's sale, so `vendas` doesn't need a
-   `registro_desperdicio_opcoes_selecionadas`-style link table (see Módulo 5 section). What's still open
-   is `receita_opcoes_variaveis.padrao` — no option is marked as the assumed default for any grupo
-   variável, since there's no real choice-frequency data to justify picking one. A prato's own variable
-   group currently contributes 0 to consumo teórico until either real frequency data or a deliberate
-   business assumption sets `padrao` on something.
+   `registro_desperdicio_opcoes_selecionadas`-style link table (see Módulo 5 section).
+   `receita_opcoes_variaveis.padrao` is now set for Wrap Frango Picante's Proteína grupo (Frango
+   Crocante) and used by `desperdicio.html` — but only there. `calcular_consumo_teorico_medio_diario`
+   (Módulo 5) still ignores `padrao` and still contributes 0 for variable groups; whether Módulo 5 should
+   also start using `padrao` hasn't been asked or decided.
 3. Supplier rounding/minimum-lot rules beyond simple closed-box rounding — implemented and verified
    (`ceil(necessidade / lote_minimo_compra) * lote_minimo_compra`), but only the "closed box" case has
    been exercised; no per-supplier minimum-order-value or mixed-lot rules yet.

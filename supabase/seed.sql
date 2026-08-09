@@ -148,6 +148,18 @@ where p.nome = 'Wrap Frango Picante' and g.nome = 'Proteína'
     select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id
   );
 
+-- Frango Crocante como opção padrão do grupo Proteína — decisão do usuário
+-- (não inferida): pra desperdício de "Wrap Frango Picante", o sistema não
+-- pergunta mais qual proteína foi usada, assume a que está marcada aqui.
+update receita_opcoes_variaveis
+set padrao = true
+where grupo_id = (
+    select g.id from receita_grupos_variaveis g
+    join pratos p on p.id = g.prato_id
+    where p.nome = 'Wrap Frango Picante' and g.nome = 'Proteína'
+  )
+  and ingrediente_id = (select id from ingredientes where nome = 'Frango Crocante');
+
 -- ----------------------------------------------------------------------------
 -- Módulo 3 — Desperdício: 2 Wrap Frango Picante com Frango Crocante
 -- ----------------------------------------------------------------------------

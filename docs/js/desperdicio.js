@@ -25,6 +25,7 @@ const MOTIVO_LABEL = {
 
 let loja = null;
 let ingredientesPorId = {};
+let gruposPadrao = []; // [{ grupoId, grupoNome, opcaoId, opcaoNome }] do prato selecionado
 
 async function carregarUltimos() {
   if (!loja) return;
@@ -92,51 +93,50 @@ async function carregar() {
   await carregarUltimos();
 }
 
+// Não pergunta qual opção variável (ex. proteína) foi usada — assume a
+// opção marcada como `padrao` na receita do prato (decisão do usuário, não
+// inferida por nós: "assuma que a proteína ... é a que consta na tabela de
+// ingredientes por prato"). Só mostra uma linha informativa, sem seletor.
 async function carregarGruposDoPrato(pratoId) {
-  gruposDiv.innerHTML = '<p class="hint">Carregando opções...</p>';
+  gruposDiv.textContent = 'Carregando...';
+  gruposPadrao = [];
 
   const { data: grupos, error } = await supabase
     .from('receita_grupos_variaveis')
-    .select('id, nome, obrigatorio')
+    .select('id, nome')
     .eq('prato_id', pratoId)
     .order('nome');
 
   if (error) {
-    gruposDiv.innerHTML = `<div class="error">Erro ao carregar grupos: ${error.message}</div>`;
+    gruposDiv.innerHTML = `<span class="error">Erro ao carregar grupos: ${error.message}</span>`;
     return;
   }
 
   if (!grupos.length) {
-    gruposDiv.innerHTML = '';
+    gruposDiv.textContent = '';
     return;
   }
 
-  gruposDiv.innerHTML = '';
+  const linhas = [];
   for (const grupo of grupos) {
-    const { data: opcoes, error: opErr } = await supabase
+    const { data: padrao, error: opErr } = await supabase
       .from('receita_opcoes_variaveis')
-      .select('id, quantidade, unidade, ingrediente:ingredientes(nome)')
+      .select('id, ingrediente:ingredientes(nome)')
       .eq('grupo_id', grupo.id)
-      .order('id');
+      .eq('padrao', true)
+      .limit(1)
+      .maybeSingle();
 
-    const label = document.createElement('label');
-    label.textContent = grupo.nome + (grupo.obrigatorio ? '' : ' (opcional)');
-
-    const select = document.createElement('select');
-    select.dataset.grupoId = grupo.id;
-    select.dataset.grupoObrigatorio = grupo.obrigatorio;
-
-    const options = [];
-    if (!grupo.obrigatorio) options.push('<option value="">— nenhuma —</option>');
-    if (!opErr) {
-      for (const op of opcoes) {
-        options.push(`<option value="${op.id}">${op.ingrediente.nome} (${op.quantidade}${op.unidade})</option>`);
-      }
+    if (!opErr && padrao) {
+      gruposPadrao.push({ grupoId: grupo.id, grupoNome: grupo.nome, opcaoId: padrao.id });
+      linhas.push(`${grupo.nome}: ${padrao.ingrediente.nome} (assumido pela receita)`);
+    } else {
+      gruposPadrao.push({ grupoId: grupo.id, grupoNome: grupo.nome, opcaoId: null });
+      linhas.push(`${grupo.nome}: nenhuma opção padrão definida ainda — não será registrada`);
     }
-    select.innerHTML = options.join('');
-
-    gruposDiv.append(label, select);
   }
+
+  gruposDiv.innerHTML = linhas.join('<br>');
 }
 
 async function carregarUnidadesDoIngrediente(ingredienteId) {
@@ -192,12 +192,12 @@ form.addEventListener('submit', async (e) => {
 
       if (error) throw error;
 
-      const selecoes = [...gruposDiv.querySelectorAll('select')]
-        .filter((s) => s.value)
-        .map((s) => ({
+      const selecoes = gruposPadrao
+        .filter((g) => g.opcaoId)
+        .map((g) => ({
           registro_desperdicio_id: registro.id,
-          grupo_id: s.dataset.grupoId,
-          opcao_id: s.value,
+          grupo_id: g.grupoId,
+          opcao_id: g.opcaoId,
         }));
 
       if (selecoes.length) {
