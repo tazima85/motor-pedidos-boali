@@ -194,6 +194,50 @@ where l.nome = 'Boali São Carlos'
   );
 
 -- ----------------------------------------------------------------------------
+-- Módulo 5 — Vendas reais da semana de 02/08/2026 a 08/08/2026
+--
+-- Fonte: relatório semanal por PLU do PDV (uploads/Vendas_PLU.xlsx, fora do
+-- git — tem faturamento real). Granularidade real do dado é por período
+-- (semana), não por venda individual, daí vendas.data_inicio/data_fim.
+--
+-- "Frango Crocante 70g (Proteína Extra)" modela o PLU 240004 — quando a
+-- proteína de um prato é extra ou de um item montável, ela sai como PLU
+-- próprio no PDV, então vira aqui um prato 'fixo' de um componente só,
+-- reaproveitando a mesma decomposição por receita.
+-- ----------------------------------------------------------------------------
+
+update pratos set codigo_plu = '220002'
+where nome = 'Wrap Frango Picante' and codigo_plu is distinct from '220002';
+
+insert into pratos (nome, tipo, codigo_plu)
+select 'Frango Crocante 70g (Proteína Extra)', 'fixo', '240004'
+where not exists (select 1 from pratos where codigo_plu = '240004');
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, 70, 'g'
+from pratos p
+join ingredientes i on i.nome = 'Frango Crocante'
+where p.codigo_plu = '240004'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into vendas (data_inicio, data_fim, loja_id, prato_id, quantidade, valor_total, desconto, impostos, liquido)
+select '2026-08-02', '2026-08-08', l.id, p.id, v.quantidade, v.valor_total, v.desconto, v.impostos, v.liquido
+from lojas l
+join (values
+  ('220002', 19,  846.10, 63.01, 0, 783.09),
+  ('240004', 67,  608.20, 38.94, 0, 569.26)
+) as v(codigo_plu, quantidade, valor_total, desconto, impostos, liquido) on true
+join pratos p on p.codigo_plu = v.codigo_plu
+where l.nome = 'Boali São Carlos'
+  and not exists (
+    select 1 from vendas ve
+    where ve.prato_id = p.id and ve.loja_id = l.id
+      and ve.data_inicio = '2026-08-02' and ve.data_fim = '2026-08-08'
+  );
+
+-- ----------------------------------------------------------------------------
 -- Verificação manual (não faz parte do seed — só para conferir o resultado):
 --
 -- -- estoque atual de Frango Crocante convertido para a unidade base (g)
