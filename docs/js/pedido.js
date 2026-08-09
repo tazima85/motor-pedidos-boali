@@ -50,7 +50,7 @@ calcularBtn.addEventListener('click', async () => {
 
   const { data: ingredientes, error: ingErr } = await supabase
     .from('ingredientes')
-    .select('id, nome, unidade_compra_fornecedor')
+    .select('id, nome, unidade_compra_fornecedor, unidade_base')
     .eq('ativo', true)
     .not('unidade_compra_fornecedor', 'is', null);
 
@@ -86,8 +86,8 @@ calcularBtn.addEventListener('click', async () => {
       }
       return `<tr>
         <td>${ing.nome}</td>
-        <td>${Number(linha.consumo_esperado).toFixed(1)}</td>
-        <td>${Number(linha.estoque_atual_base).toFixed(1)}</td>
+        <td>${Number(linha.consumo_esperado).toFixed(1)} ${ing.unidade_base}</td>
+        <td>${Number(linha.estoque_atual_base).toFixed(1)} ${ing.unidade_base}</td>
         <td><strong>${linha.pedido_sugerido} ${linha.unidade_compra}</strong></td>
       </tr>`;
     })

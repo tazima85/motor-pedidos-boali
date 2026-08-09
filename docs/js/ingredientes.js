@@ -82,6 +82,7 @@ function render() {
 
     const tdNome = document.createElement('td');
     const inputNome = document.createElement('input');
+    inputNome.style.width = '320px';
     inputNome.value = pend.nome ?? ing.nome;
     inputNome.addEventListener('input', () => marcarPendencia(ing, 'nome', inputNome.value));
     tdNome.appendChild(inputNome);

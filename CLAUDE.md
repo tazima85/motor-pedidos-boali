@@ -201,14 +201,23 @@ was actually asked for.
   `supabase.rpc(...)` once per ingrediente that has `unidade_compra_fornecedor` set (in parallel via
   `Promise.all`), renders one row per ingrediente with consumo esperado / estoque atual / pedido
   sugerido. Per-ingrediente RPC errors (e.g. missing `unidades_conversao`) are caught and shown inline
-  per row rather than aborting the whole calculation.
+  per row rather than aborting the whole calculation. Consumo esperado and estoque atual both display
+  the ingrediente's `unidade_base` after the number — the RPC already returns both in that same unit
+  internally (`calcular_pedido_sugerido` converts everything to `unidade_base` before comparing them),
+  so this is a label added for clarity, not a unit-matching fix; `unidade_base` itself isn't part of the
+  RPC's return columns, so it's fetched separately in the same `ingredientes` query used for the RPC
+  parameters.
 - `desperdicio.html` / `js/desperdicio.js` — Módulo 3 UI. Toggles between "prato" and "ingrediente_bruto".
   For a prato, dynamically loads its `receita_grupos_variaveis` + `receita_opcoes_variaveis` and renders
   one `<select>` per group (this is what feeds `registro_desperdicio_opcoes_selecionadas`); optional
   groups get a "— nenhuma —" option, required groups don't. For an ingrediente bruto, the unit dropdown
-  is built from that ingrediente's real `unidades_conversao` rows plus its `unidade_base`.
+  is built from that ingrediente's real `unidades_conversao` rows plus its `unidade_base`. Below the
+  form, a table lists the loja's last 10 `registros_desperdicio` (data, item — prato or ingrediente name,
+  whichever is set — quantidade+unidade, motivo mapped to a readable label), refreshed on page load and
+  again right after a successful submit.
 - `ingredientes.html` / `js/ingredientes.js` — catalog edit screen. Sortable/filterable table of every
-  active ingrediente with inline-editable nome, posição, unidade de contagem, and an "Ocultar" checkbox.
+  active ingrediente with inline-editable nome (input explicitly widened to 320px — the previous
+  default made long product names hard to read), posição, unidade de contagem, and an "Ocultar" checkbox.
   **Batch save, not per-field**: edits are held in an in-memory `pendencias` map keyed by ingrediente id
   and only written on an explicit "Salvar alterações" button at the top of the page (shows a live pending
   count, e.g. "Salvar alterações (3)"); the first version auto-saved per field on blur with no button,

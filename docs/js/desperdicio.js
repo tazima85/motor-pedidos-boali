@@ -14,9 +14,51 @@ const ingredienteSel = document.getElementById('ingrediente');
 const unidadeIngredienteSel = document.getElementById('unidade-ingrediente');
 const submitBtn = document.getElementById('submit-btn');
 const msg = document.getElementById('msg');
+const ultimosTbody = document.getElementById('ultimos-tbody');
+
+const MOTIVO_LABEL = {
+  validade_vencida: 'Validade vencida',
+  erro_preparo: 'Erro de preparo',
+  queda_acidente: 'Queda / acidente',
+  outro: 'Outro',
+};
 
 let loja = null;
 let ingredientesPorId = {};
+
+async function carregarUltimos() {
+  if (!loja) return;
+
+  const { data, error } = await supabase
+    .from('registros_desperdicio')
+    .select('data, quantidade, unidade, motivo, prato:pratos(nome), ingrediente:ingredientes(nome)')
+    .eq('loja_id', loja.id)
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  if (error) {
+    ultimosTbody.innerHTML = `<tr><td colspan="4" class="error">Erro ao carregar: ${error.message}</td></tr>`;
+    return;
+  }
+
+  if (!data.length) {
+    ultimosTbody.innerHTML = '<tr><td colspan="4" class="hint">Nenhum lançamento ainda.</td></tr>';
+    return;
+  }
+
+  ultimosTbody.innerHTML = data
+    .map((r) => {
+      const item = r.prato?.nome ?? r.ingrediente?.nome ?? '—';
+      const motivo = r.motivo ? (MOTIVO_LABEL[r.motivo] ?? r.motivo) : '—';
+      return `<tr>
+        <td>${r.data}</td>
+        <td>${item}</td>
+        <td>${r.quantidade} ${r.unidade}</td>
+        <td>${motivo}</td>
+      </tr>`;
+    })
+    .join('');
+}
 
 async function carregar() {
   const { data: lojas, error: lojaErr } = await supabase
@@ -46,6 +88,8 @@ async function carregar() {
 
   if (pratos.length) await carregarGruposDoPrato(pratos[0].id);
   if (ingredientes.length) await carregarUnidadesDoIngrediente(ingredientes[0].id);
+
+  await carregarUltimos();
 }
 
 async function carregarGruposDoPrato(pratoId) {
@@ -179,6 +223,7 @@ form.addEventListener('submit', async (e) => {
     msg.innerHTML = '<div class="success">Perda registrada com sucesso.</div>';
     form.reset();
     tipoPerdaSel.dispatchEvent(new Event('change'));
+    await carregarUltimos();
   } catch (err) {
     msg.innerHTML = `<div class="error">Erro ao registrar: ${err.message}</div>`;
   } finally {
