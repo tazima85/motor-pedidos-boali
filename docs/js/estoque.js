@@ -6,7 +6,6 @@ await requireAuth();
 const tbody = document.getElementById('tbody');
 const lojaLabel = document.getElementById('loja-label');
 const saveBtn = document.getElementById('save-btn');
-const pdfBtn = document.getElementById('pdf-btn');
 const msg = document.getElementById('msg');
 
 let loja = null;
@@ -124,8 +123,52 @@ document.querySelectorAll('th[data-key]').forEach((th) => {
   });
 });
 
+function gerarPdf(hoje, quantidadesSalvas) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  let y = 15;
+
+  doc.setFontSize(14);
+  doc.text(`Contagem de Estoque — ${loja?.nome ?? ''}`, 14, y);
+  y += 6;
+  doc.setFontSize(10);
+  doc.text(`Data: ${hoje.split('-').reverse().join('/')}`, 14, y);
+  y += 10;
+
+  doc.setFontSize(11);
+  doc.text('Posição', 14, y);
+  doc.text('Produto', 34, y);
+  doc.text('Unid.', 150, y);
+  doc.text('Contagem', 170, y);
+  y += 2;
+  doc.line(14, y, 196, y);
+  y += 6;
+
+  doc.setFontSize(9);
+  for (const ing of ingredientes) {
+    if (y > 285) {
+      doc.addPage();
+      y = 15;
+    }
+    doc.text(String(ing.posicao), 14, y);
+    doc.text(ing.nome, 34, y, { maxWidth: 110 });
+    doc.text(ing.unidade, 150, y);
+    const contado = quantidadesSalvas[ing.id];
+    if (contado !== undefined) {
+      doc.text(String(contado), 170, y);
+    } else {
+      doc.line(170, y + 1, 196, y + 1);
+    }
+    y += 7;
+  }
+
+  doc.save(`contagem-estoque-${hoje}.pdf`);
+}
+
 saveBtn.addEventListener('click', async () => {
   const hoje = new Date().toISOString().slice(0, 10);
+  const quantidadesSalvas = { ...quantidades }; // snapshot pro PDF, antes de limpar
+
   const linhas = Object.entries(quantidades)
     .filter(([, v]) => v !== '' && !Number.isNaN(Number(v)))
     .map(([ingrediente_id, v]) => {
@@ -147,7 +190,7 @@ saveBtn.addEventListener('click', async () => {
 
   const { error } = await supabase.from('contagens_estoque').insert(linhas);
 
-  saveBtn.textContent = 'Salvar contagem';
+  saveBtn.textContent = 'Salvar Contagem e Gerar PDF';
 
   if (error) {
     msg.innerHTML = `<div class="error">Erro ao salvar: ${error.message}</div>`;
@@ -155,52 +198,12 @@ saveBtn.addEventListener('click', async () => {
     return;
   }
 
-  msg.innerHTML = `<div class="success">${linhas.length} item(ns) registrado(s) com sucesso.</div>`;
+  gerarPdf(hoje, quantidadesSalvas);
+
+  msg.innerHTML = `<div class="success">${linhas.length} item(ns) registrado(s) e PDF gerado.</div>`;
   for (const key of Object.keys(quantidades)) delete quantidades[key];
   saveBtn.disabled = true;
   render();
-});
-
-// Folha em branco pra contar no papel — mesma ordem exibida na tela no
-// momento (respeita a ordenação atual), sem os valores digitados (esses só
-// existem em memória até "Salvar contagem", não fazem sentido num PDF que
-// é justamente pra levar pro chão da loja e preencher à mão).
-pdfBtn.addEventListener('click', () => {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  let y = 15;
-
-  doc.setFontSize(14);
-  doc.text(`Contagem de Estoque — ${loja?.nome ?? ''}`, 14, y);
-  y += 6;
-  doc.setFontSize(10);
-  doc.text(`Data: ____/____/______`, 14, y);
-  y += 10;
-
-  doc.setFontSize(11);
-  doc.text('Posição', 14, y);
-  doc.text('Produto', 34, y);
-  doc.text('Unid.', 150, y);
-  doc.text('Contagem', 170, y);
-  y += 2;
-  doc.line(14, y, 196, y);
-  y += 6;
-
-  doc.setFontSize(9);
-  for (const ing of ingredientes) {
-    if (y > 285) {
-      doc.addPage();
-      y = 15;
-    }
-    doc.text(String(ing.posicao), 14, y);
-    doc.text(ing.nome, 34, y, { maxWidth: 110 });
-    doc.text(ing.unidade, 150, y);
-    doc.line(170, y + 1, 196, y + 1);
-    y += 7;
-  }
-
-  const hoje = new Date().toISOString().slice(0, 10);
-  doc.save(`contagem-estoque-${hoje}.pdf`);
 });
 
 carregar();

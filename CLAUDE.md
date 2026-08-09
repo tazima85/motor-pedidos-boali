@@ -214,14 +214,17 @@ was actually asked for.
 - `index.html` — post-login menu with five entries.
 - `estoque.html` / `js/estoque.js` — Módulo 4 UI. Fetches active, non-`oculto_contagem` `ingredientes`
   (joined to `setores` for posição), renders a client-side-sortable table (click any header to toggle
-  asc/desc — the spec's explicit requirement), one numeric input per row, bulk-inserts into
-  `contagens_estoque` on save. Falls back to `unidade_base` for any ingrediente that doesn't have
-  `unidade_contagem_padrao` set yet (some catalog items still don't, post-PDF-import). "Gerar PDF"
-  button (jsPDF via CDN, `<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/...">`, loaded as a
-  plain non-module script so it attaches `window.jspdf` for the module script to read) generates a blank
-  printable count sheet — posição/nome/unidade per row plus an empty line to write the count on paper,
-  in whatever sort order the screen currently has. Doesn't write to the database; that only happens via
-  "Salvar contagem".
+  asc/desc — the spec's explicit requirement), one numeric input per row. **Single button**, "Salvar
+  Contagem e Gerar PDF" — originally two separate buttons (save, and a blank-sheet PDF), merged into one
+  on request. On click: bulk-inserts into `contagens_estoque` first; only if that succeeds does it
+  generate the PDF (jsPDF via CDN, `<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/...">`, loaded
+  as a plain non-module script so it attaches `window.jspdf` for the module script to read) — a snapshot
+  of `quantidades` is taken at the top of the click handler, before the object gets cleared post-save, so
+  the PDF reflects what was actually typed. The PDF is now **filled with the values just counted**, not
+  a blank sheet: each row prints the typed number in the Contagem column when present, falling back to a
+  blank line (the original behavior) for any item not filled in this round. Falls back to `unidade_base`
+  for any ingrediente that doesn't have `unidade_contagem_padrao` set yet (some catalog items still
+  don't, post-PDF-import).
 - `vendas.html` / `js/vendas.js` — Módulo 5 UI. Parses an uploaded `.xlsx` client-side via SheetJS
   (`https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs`, also CDN-loaded, no npm dep). Matches columns
   by **header text** (`PLU`, first `Nome`, exact `Qtd` — not `Qtd %`, `Valor total`, `Desconto`,
@@ -377,6 +380,11 @@ Supabase project:
   bug — a real user's browser won't have just done a rapid string of automated downloads before their
   first click, so this shouldn't surface outside of testing. If a future PDF button here "does nothing"
   during testing, try a fresh tab before assuming the generation code is broken.
+- Re-verified after merging estoque.html's save+PDF buttons into one: typed `7` into ACAI FROOTY (a real
+  catalog item), clicked the single button (fresh tab, real mouse click), confirmed **both** effects —
+  `contagens_estoque` got the row (via SQL) **and** the downloaded PDF (opened and read back) shows
+  `ACAI FROOTY | bd | 7` filled in on that exact line, every other row still a blank line. That test
+  count (7) is left in the database, same rationale as other real-input test rows in this doc.
 
 ### Deployment
 
