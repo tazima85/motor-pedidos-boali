@@ -151,14 +151,21 @@ Supabase project:
 
 ### Deployment
 
-Pushed to a **private** GitHub repo (`tazima85/motor-pedidos-boali`) with GitHub Pages enabled, source
-`master` branch `/docs`. Deliberate tradeoff, decided with the user: the repo being private does **not**
-make the published Pages site private — GitHub only restricts Pages visibility on Enterprise plans, so
-`https://tazima85.github.io/motor-pedidos-boali/` is reachable by anyone with the URL. Supabase Auth +
-RLS is the actual access boundary (no session → login screen only, no data reachable), not repo/URL
-secrecy. If that stops being an acceptable tradeoff, moving to a host with real access control
-(password-protected Netlify/Vercel deploy, etc.) is the fix — not just re-privating something that was
-already effectively public.
+Live at **https://tazima85.github.io/motor-pedidos-boali/**, verified with a real login end-to-end
+against the deployed site (not just locally). GitHub repo `tazima85/motor-pedidos-boali`, source
+`master` branch `/docs`.
+
+The repo is **public**, not private — this was a real constraint, not a preference: GitHub Pages for
+private repos requires GitHub Pro, and `gh api .../pages` failed with a 422 ("Your current plan does
+not support GitHub Pages for this repository") on the free plan. Presented with pay-for-Pro vs.
+deploy-elsewhere vs. go-public, the user chose to make the repo public, accepting that
+`uploads/` (real Comfrio pricing and full menu recipe data) and all source code are now publicly
+visible on GitHub. Independently of repo visibility, the *site itself* was always going to be reachable
+by anyone with the URL regardless — GitHub only restricts Pages visibility on Enterprise plans — so
+Supabase Auth + RLS remains the actual data-access boundary (no session → login screen only, nothing
+queryable). If exposing `uploads/`'s business data specifically becomes a problem, the fix is removing
+those files from the repo (or a host with real access control for the whole site), not just flipping
+visibility back to private — Pages would stop working on the free plan again if that happens.
 
 ### Not done yet
 
