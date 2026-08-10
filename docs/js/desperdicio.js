@@ -75,7 +75,7 @@ async function carregar() {
 
   const [{ data: pratos, error: pratosErr }, { data: ingredientes, error: ingErr }] = await Promise.all([
     supabase.from('pratos').select('id, nome').eq('ativo', true).order('nome'),
-    supabase.from('ingredientes').select('id, nome, unidade_base').eq('ativo', true).order('nome'),
+    supabase.from('ingredientes').select('id, nome, unidade_base').eq('ativo', true).eq('oculto_contagem', false).order('nome'),
   ]);
 
   if (pratosErr || ingErr) {
