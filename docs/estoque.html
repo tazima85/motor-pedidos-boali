@@ -32,8 +32,13 @@
       </table>
     </div>
 
-    <button class="primary" id="save-btn" disabled>Salvar Contagem e Gerar PDF</button>
+    <button class="primary" id="save-btn" disabled>Salvar Contagem</button>
     <div id="msg"></div>
+    <div id="pdf-confirm" class="hidden">
+      <p>Deseja gerar o PDF da contagem?</p>
+      <button class="primary" id="pdf-sim-btn">Sim, gerar PDF</button>
+      <button id="pdf-nao-btn">Não</button>
+    </div>
   </div>
 
   <script type="module" src="js/estoque.js"></script>

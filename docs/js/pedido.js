@@ -12,9 +12,13 @@ const periodoLabel = document.getElementById('periodo-label');
 const resultadoTbody = document.getElementById('resultado-tbody');
 const pdfBtn = document.getElementById('pdf-btn');
 const pdfMsg = document.getElementById('pdf-msg');
+const pdfConfirm = document.getElementById('pdf-confirm');
+const pdfSimBtn = document.getElementById('pdf-sim-btn');
+const pdfNaoBtn = document.getElementById('pdf-nao-btn');
 
 let loja = null;
 let ultimoCalculo = null; // { dataPedido, resultados }
+let pendentePdf = null;   // { dataPedido, resultados, validos } aguardando confirmação
 
 async function carregar() {
   const { data: lojas, error: lojaErr } = await supabase
@@ -37,6 +41,8 @@ function ehQuinta(dataStr) {
 calcularBtn.addEventListener('click', async () => {
   msg.innerHTML = '';
   resultadoWrap.classList.add('hidden');
+  pdfConfirm.classList.add('hidden');
+  pendentePdf = null;
 
   const dataPedido = dataPedidoInput.value;
   if (!dataPedido) {
@@ -104,41 +110,7 @@ calcularBtn.addEventListener('click', async () => {
   ultimoCalculo = { dataPedido, resultados };
 });
 
-pdfBtn.addEventListener('click', async () => {
-  if (!ultimoCalculo) return;
-
-  pdfBtn.disabled = true;
-  pdfBtn.textContent = 'Salvando e gerando PDF...';
-  pdfMsg.innerHTML = '';
-
-  const { dataPedido, resultados } = ultimoCalculo;
-  const validos = resultados.filter((r) => r.linha);
-
-  const registros = validos.map(({ ing, linha }) => ({
-    data_pedido: dataPedido,
-    loja_id: loja.id,
-    ingrediente_id: ing.id,
-    periodo_inicio: linha.periodo_inicio,
-    periodo_fim: linha.periodo_fim,
-    consumo_teorico_base: linha.consumo_teorico_base,
-    desperdicio_periodo: linha.desperdicio_periodo,
-    fator_sazonalidade_passada: linha.fator_sazonalidade_passada,
-    fator_sazonalidade_futura: linha.fator_sazonalidade_futura,
-    consumo_esperado: linha.consumo_esperado,
-    estoque_atual_base: linha.estoque_atual_base,
-    necessidade_bruta: linha.necessidade_bruta,
-    unidade_compra: linha.unidade_compra,
-    lote_minimo: linha.lote_minimo,
-    pedido_sugerido: linha.pedido_sugerido,
-  }));
-
-  if (registros.length) {
-    const { error } = await supabase.from('pedidos_sugeridos').insert(registros);
-    if (error) {
-      pdfMsg.innerHTML = `<div class="error">Erro ao salvar histórico: ${error.message} (PDF gerado mesmo assim)</div>`;
-    }
-  }
-
+function gerarPdf(dataPedido, resultados, validos) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
   let y = 15;
@@ -183,13 +155,74 @@ pdfBtn.addEventListener('click', async () => {
     y += 6;
   }
 
-  doc.save(`pedido-sugerido-${dataPedido}.pdf`);
+  // <a target="_blank"> com data URI (não blob: — blob: não abre em outra aba no Safari,
+  // ele ignora target="_blank" e navega a própria aba atual) e sem window.open() (cujo
+  // bloqueio de pop-up no Safari também caía de volta pra aba atual). Chamado a partir de
+  // um clique real no botão "Sim" — encadear direto depois do await de salvar no histórico
+  // não conta como gesto do usuário no iOS Safari.
+  const link = document.createElement('a');
+  link.href = doc.output('datauristring');
+  link.target = '_blank';
+  link.rel = 'noopener';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+pdfBtn.addEventListener('click', async () => {
+  if (!ultimoCalculo) return;
+
+  pdfBtn.disabled = true;
+  pdfBtn.textContent = 'Salvando...';
+  pdfMsg.innerHTML = '';
+  pdfConfirm.classList.add('hidden');
+
+  const { dataPedido, resultados } = ultimoCalculo;
+  const validos = resultados.filter((r) => r.linha);
+
+  const registros = validos.map(({ ing, linha }) => ({
+    data_pedido: dataPedido,
+    loja_id: loja.id,
+    ingrediente_id: ing.id,
+    periodo_inicio: linha.periodo_inicio,
+    periodo_fim: linha.periodo_fim,
+    consumo_teorico_base: linha.consumo_teorico_base,
+    desperdicio_periodo: linha.desperdicio_periodo,
+    fator_sazonalidade_passada: linha.fator_sazonalidade_passada,
+    fator_sazonalidade_futura: linha.fator_sazonalidade_futura,
+    consumo_esperado: linha.consumo_esperado,
+    estoque_atual_base: linha.estoque_atual_base,
+    necessidade_bruta: linha.necessidade_bruta,
+    unidade_compra: linha.unidade_compra,
+    lote_minimo: linha.lote_minimo,
+    pedido_sugerido: linha.pedido_sugerido,
+  }));
+
+  if (registros.length) {
+    const { error } = await supabase.from('pedidos_sugeridos').insert(registros);
+    if (error) {
+      pdfMsg.innerHTML = `<div class="error">Erro ao salvar histórico: ${error.message} (pode gerar o PDF mesmo assim)</div>`;
+    } else {
+      pdfMsg.innerHTML = '<div class="success">Salvo no histórico.</div>';
+    }
+  }
 
   pdfBtn.disabled = false;
-  pdfBtn.textContent = 'Gerar PDF (e salvar no histórico)';
-  if (!pdfMsg.innerHTML) {
-    pdfMsg.innerHTML = '<div class="success">Salvo no histórico e PDF gerado.</div>';
-  }
+  pdfBtn.textContent = 'Salvar no histórico';
+  pendentePdf = { dataPedido, resultados, validos };
+  pdfConfirm.classList.remove('hidden');
+});
+
+pdfSimBtn.addEventListener('click', () => {
+  if (!pendentePdf) return;
+  gerarPdf(pendentePdf.dataPedido, pendentePdf.resultados, pendentePdf.validos);
+  pdfConfirm.classList.add('hidden');
+  pendentePdf = null;
+});
+
+pdfNaoBtn.addEventListener('click', () => {
+  pdfConfirm.classList.add('hidden');
+  pendentePdf = null;
 });
 
 carregar();

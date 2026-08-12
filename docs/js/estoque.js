@@ -7,12 +7,16 @@ const tbody = document.getElementById('tbody');
 const lojaLabel = document.getElementById('loja-label');
 const saveBtn = document.getElementById('save-btn');
 const msg = document.getElementById('msg');
+const pdfConfirm = document.getElementById('pdf-confirm');
+const pdfSimBtn = document.getElementById('pdf-sim-btn');
+const pdfNaoBtn = document.getElementById('pdf-nao-btn');
 
 let loja = null;
 let ingredientes = [];        // { id, nome, unidade, posicao }
 const quantidades = {};       // ingrediente_id -> string digitada
 let sortKey = 'posicao';
 let sortDir = 'asc';
+let pendentePdf = null;       // { hoje, quantidadesSalvas } aguardando confirmação
 
 async function carregar() {
   const { data: lojas, error: lojaErr } = await supabase
@@ -162,7 +166,16 @@ function gerarPdf(hoje, quantidadesSalvas) {
     y += 7;
   }
 
-  doc.save(`contagem-estoque-${hoje}.pdf`);
+  // <a target="_blank"> com data URI (não blob: — blob: não abre em outra aba no Safari,
+  // ele ignora target="_blank" e navega a própria aba atual) e sem window.open() (cujo
+  // bloqueio de pop-up no Safari também caía de volta pra aba atual).
+  const link = document.createElement('a');
+  link.href = doc.output('datauristring');
+  link.target = '_blank';
+  link.rel = 'noopener';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
 saveBtn.addEventListener('click', async () => {
@@ -187,10 +200,11 @@ saveBtn.addEventListener('click', async () => {
   saveBtn.disabled = true;
   saveBtn.textContent = 'Salvando...';
   msg.innerHTML = '';
+  pdfConfirm.classList.add('hidden');
 
   const { error } = await supabase.from('contagens_estoque').insert(linhas);
 
-  saveBtn.textContent = 'Salvar Contagem e Gerar PDF';
+  saveBtn.textContent = 'Salvar Contagem';
 
   if (error) {
     msg.innerHTML = `<div class="error">Erro ao salvar: ${error.message}</div>`;
@@ -198,12 +212,26 @@ saveBtn.addEventListener('click', async () => {
     return;
   }
 
-  gerarPdf(hoje, quantidadesSalvas);
-
-  msg.innerHTML = `<div class="success">${linhas.length} item(ns) registrado(s) e PDF gerado.</div>`;
+  msg.innerHTML = `<div class="success">${linhas.length} item(ns) registrado(s).</div>`;
+  // pergunta em vez de gerar direto: no iOS Safari, abrir o PDF em nova aba só funciona
+  // com um toque real do usuário — encadear depois do await do salvamento não conta.
+  pendentePdf = { hoje, quantidadesSalvas };
+  pdfConfirm.classList.remove('hidden');
   for (const key of Object.keys(quantidades)) delete quantidades[key];
   saveBtn.disabled = true;
   render();
+});
+
+pdfSimBtn.addEventListener('click', () => {
+  if (!pendentePdf) return;
+  gerarPdf(pendentePdf.hoje, pendentePdf.quantidadesSalvas);
+  pdfConfirm.classList.add('hidden');
+  pendentePdf = null;
+});
+
+pdfNaoBtn.addEventListener('click', () => {
+  pdfConfirm.classList.add('hidden');
+  pendentePdf = null;
 });
 
 carregar();
