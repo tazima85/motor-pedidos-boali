@@ -155,18 +155,12 @@ function gerarPdf(dataPedido, resultados, validos) {
     y += 6;
   }
 
-  // <a target="_blank"> com data URI (não blob: — blob: não abre em outra aba no Safari,
-  // ele ignora target="_blank" e navega a própria aba atual) e sem window.open() (cujo
-  // bloqueio de pop-up no Safari também caía de volta pra aba atual). Chamado a partir de
+  // Método nativo do jsPDF: abre a janela e escreve nela um <iframe src="data:...">, em
+  // vez de navegar a aba inteira pra data URI — navegação de aba inteira pra data: URI é
+  // bloqueada silenciosamente pelo Safari (ficava com aba em branco). Chamado a partir de
   // um clique real no botão "Sim" — encadear direto depois do await de salvar no histórico
   // não conta como gesto do usuário no iOS Safari.
-  const link = document.createElement('a');
-  link.href = doc.output('datauristring');
-  link.target = '_blank';
-  link.rel = 'noopener';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  doc.output('dataurlnewwindow', { filename: `pedido-sugerido-${dataPedido}.pdf` });
 }
 
 pdfBtn.addEventListener('click', async () => {
