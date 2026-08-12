@@ -166,10 +166,14 @@ function gerarPdf(hoje, quantidadesSalvas) {
     y += 7;
   }
 
-  // Método nativo do jsPDF: abre a janela e escreve nela um <iframe src="data:...">, em
-  // vez de navegar a aba inteira pra data URI — navegação de aba inteira pra data: URI é
-  // bloqueada silenciosamente pelo Safari (ficava com aba em branco).
-  doc.output('dataurlnewwindow', { filename: `contagem-estoque-${hoje}.pdf` });
+  // window.open() direto com blob URL, chamado de forma síncrona a partir de um clique
+  // real do usuário (botão "Sim") — sem esse gesto fresco (ex.: encadeado depois de um
+  // await), o Safari bloqueia ou faz besteira; com um clique genuíno deve funcionar.
+  const blobUrl = doc.output('bloburl');
+  const pdfWindow = window.open(blobUrl, '_blank');
+  if (!pdfWindow) {
+    doc.save(`contagem-estoque-${hoje}.pdf`);
+  }
 }
 
 saveBtn.addEventListener('click', async () => {
