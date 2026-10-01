@@ -79,10 +79,11 @@ an incident worth reading before running `git add -A` again in this repo).
   checked: don't let a blanket `git add -A` sweep it into a commit without looking first.
 - `docs/` — the static UI, served by GitHub Pages; see its own section below.
 
-**Note**: manual browser testing of the frontend (see below) added a few extra rows beyond the seed —
-one more `contagens_estoque` count (8 pacotes, today) and two more `registros_desperdicio` (3× and 1×
-Frango Crocante). Left in place as evidence the write paths work end-to-end; harmless to delete if a
-clean slate is wanted, just not done automatically.
+**Note**: manual browser testing of the frontend (see below) added a few extra rows beyond the seed, incl.
+one more `contagens_estoque` count (8 pacotes, today) — left in place as evidence the write paths work
+end-to-end. **Update**: `registros_desperdicio` (including the seed's own example record and all
+manual-testing rows) was cleared per explicit user request on 2026-10-01 — it's empty by default now;
+the seed no longer re-creates its example record on re-run (see seed.sql's Módulo 3 section).
 
 ## Módulo 6 — Motor de Previsão (`20260809120000_modulo_6_motor_previsao.sql`, extended by
 `20260809140000_modulo_5_vendas.sql`)
@@ -104,8 +105,10 @@ data at every stage:
 - `calcular_desperdicio_medio_diario(ingrediente_id, loja_id, data_referencia, dias_historico=28)` —
   averages real waste (direct `ingrediente_bruto` entries + decomposed `prato` entries, both fixed
   components and the selected variable option) over a trailing window, always dividing by the full
-  window length (not just days-with-waste) so quiet days genuinely pull the average down. Verified
-  against the seeded 110g Frango Crocante waste event: `110g / 28 days × 9 days coverage = 35.36g`.
+  window length (not just days-with-waste) so quiet days genuinely pull the average down. Verified at the
+  time against the seeded 110g Frango Crocante waste event: `110g / 28 days × 9 days coverage = 35.36g`.
+  **That example record no longer exists** (`registros_desperdicio` was cleared on 2026-10-01, see note
+  above) — this remains a record of what was checked, not a live number to re-derive.
 - `fator_sazonalidade_vigente(tipo, nivel, referencia_id, data)` — looks up the applicable factor,
   defaulting to `1.0` (neutral) when nothing is registered. `fatores_sazonalidade` supports
   `nivel IN ('prato','ingrediente','loja')` — the "Pontos em aberto #1" granularity question is left
@@ -282,7 +285,14 @@ was actually asked for.
   `oculto_contagem = false`, **and now also `eh_alimento = true`** (migration
   `20260813120000_eh_alimento_ingredientes.sql`) — per explicit user request, waste on a raw ingredient
   should only be logged against real food/drink, not descartáveis/embalagens/produtos de limpeza that
-  also live in the catalog. Below the
+  also live in the catalog. The ingrediente bruto unidade dropdown always offers a fixed standard set —
+  `pct`, `cx`, `kg`, `g` (labeled "gramas"), `un` (labeled "unid") — merged with whatever real
+  `unidade_base`/`unidades_conversao` the selected ingrediente actually has (`UNIDADES_PADRAO` +
+  `UNIDADE_LABEL` in `desperdicio.js`); added because most of the ~149-item PDF-imported catalog has no
+  `unidades_conversao` rows at all, so without this the dropdown often had only one option. `motivo` has
+  3 extra options beyond the original 4 — Refeição funcionário, Cortesia, Divulgação — added per request;
+  like the rest of `motivo`, these are plain text with no CHECK constraint, enforced only by this
+  `<select>` and `MOTIVO_LABEL`. Below the
   form, a table lists the loja's last 10 `registros_desperdicio` (data, item — prato or ingrediente name,
   whichever is set — quantidade+unidade, motivo mapped to a readable label), refreshed on page load and
   again right after a successful submit.

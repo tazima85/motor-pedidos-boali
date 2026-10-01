@@ -20,8 +20,20 @@ const MOTIVO_LABEL = {
   validade_vencida: 'Validade vencida',
   erro_preparo: 'Erro de preparo',
   queda_acidente: 'Queda / acidente',
+  refeicao_funcionario: 'Refeição funcionário',
+  cortesia: 'Cortesia',
+  divulgacao: 'Divulgação',
   outro: 'Outro',
 };
+
+// Unidades sempre oferecidas no combo de ingrediente bruto, além das reais
+// (unidade_base + unidades_conversao) cadastradas pro ingrediente selecionado
+// — muitos itens do catálogo (importado do PDF) não têm nenhuma unidades_
+// conversao cadastrada, então sem isso o combo ficava só com a unidade_base.
+// Rótulo customizado só onde pedido explicitamente (g → gramas, un → unid);
+// as demais aparecem com o próprio valor.
+const UNIDADES_PADRAO = ['pct', 'cx', 'kg', 'g', 'un'];
+const UNIDADE_LABEL = { g: 'gramas', un: 'unid' };
 
 let loja = null;
 let ingredientesPorId = {};
@@ -146,11 +158,11 @@ async function carregarUnidadesDoIngrediente(ingredienteId) {
     .select('unidade')
     .eq('ingrediente_id', ingredienteId);
 
-  const unidades = new Set([ing.unidade_base]);
+  const unidades = new Set([ing.unidade_base, ...UNIDADES_PADRAO]);
   if (!error) for (const c of conversoes) unidades.add(c.unidade);
 
   unidadeIngredienteSel.innerHTML = [...unidades]
-    .map((u) => `<option value="${u}">${u}</option>`)
+    .map((u) => `<option value="${u}">${UNIDADE_LABEL[u] ?? u}</option>`)
     .join('');
 }
 

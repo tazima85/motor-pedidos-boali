@@ -248,33 +248,17 @@ where id in (
 );
 
 -- ----------------------------------------------------------------------------
--- Módulo 3 — Desperdício: 2 Wrap Frango Picante com Frango Crocante
--- ----------------------------------------------------------------------------
-
-insert into registros_desperdicio (data, loja_id, tipo_perda, prato_id, quantidade, unidade)
-select '2026-08-06', l.id, 'prato', p.id, 2, 'un'
-from lojas l
-join pratos p on p.nome = 'Wrap Frango Picante'
-where l.nome = 'Boali São Carlos'
-  and not exists (
-    select 1 from registros_desperdicio rd
-    where rd.loja_id = l.id and rd.prato_id = p.id and rd.data = '2026-08-06' and rd.quantidade = 2
-  );
-
--- registra que, nesse evento, a opção usada no grupo Proteína foi "Frango Crocante"
-insert into registro_desperdicio_opcoes_selecionadas (registro_desperdicio_id, grupo_id, opcao_id)
-select rd.id, g.id, o.id
-from registros_desperdicio rd
-join pratos p on p.id = rd.prato_id and p.nome = 'Wrap Frango Picante'
-join receita_grupos_variaveis g on g.prato_id = p.id and g.nome = 'Proteína'
-join receita_opcoes_variaveis o on o.grupo_id = g.id
-join ingredientes ic on ic.id = o.ingrediente_id and ic.nome = 'Frango Crocante'
-where rd.data = '2026-08-06' and rd.quantidade = 2
-  and not exists (
-    select 1 from registro_desperdicio_opcoes_selecionadas s
-    where s.registro_desperdicio_id = rd.id and s.grupo_id = g.id
-  );
-
+-- Módulo 3 — Desperdício
+--
+-- Removido por pedido explícito do usuário ("limpe os registros de
+-- desperdicio que estão na base") — este bloco inseria um registro de
+-- exemplo (2× Wrap Frango Picante, decompondo pra Frango Crocante via a
+-- opção de Proteína selecionada nesse evento). Já estava desatualizado
+-- mesmo antes da limpeza: a correção da seção "Cardápio completo" mais
+-- abaixo mostrou que Wrap Frango Picante na verdade usa Frango desfiado,
+-- não Frango Crocante — então o exemplo não decompõe mais pro ingrediente
+-- que o nome do bloco sugeria. `registros_desperdicio` fica vazia por
+-- padrão agora; use a tela de Desperdício pra lançar dados reais.
 -- ----------------------------------------------------------------------------
 -- Módulo 4 — Contagem de estoque, por pacote
 --
