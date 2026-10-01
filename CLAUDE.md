@@ -60,11 +60,13 @@ an incident worth reading before running `git add -A` again in this repo).
   `unidade_contagem_padrao` — expect a few items to need manual correction.
 - `supabase/seed.sql` — real end-to-end data for the Frango Crocante validation: ingrediente "Frango
   Crocante" (Comfrio code `0101013100300`, `FRANGO EMPANADISSIMO CX4KG`, 1 caixa = 10 pacotes × 400g),
-  the prato "Wrap Frango Picante" (the only dish where Frango Crocante is a Proteína-group option), a
-  waste record (2× the dish, decomposed via the recipe), an illustrative stock count by pacote, a real
-  week of vendas (see Módulo 5 below), **and the full ~136-item product catalog** from `uploads/CONTAGEM
-  ESTOQUE 25.2026.pdf` (see "Ingrediente catalog import" note below). Idempotent (safe to re-run).
-  Sourced from `uploads/Quadro_Receitas_Completo_2026 (2).xlsx` (full recipe matrix), `uploads/Pedido
+  the prato "Wrap Frango Picante", a waste record (2× the dish, decomposed via the recipe), an
+  illustrative stock count by pacote, a real week of vendas (see Módulo 5 below), **the full ~136-item
+  product catalog** from `uploads/CONTAGEM ESTOQUE 25.2026.pdf` (see "Ingrediente catalog import" note
+  below), **and now the complete 35-prato cardápio** from `uploads/Quadro_Receitas_Completo_2026
+  (2).xlsx` (see "Quadro de Receitas matrix" section below for the import's structure and two real
+  corrections it surfaced). Idempotent (safe to re-run). Sourced from
+  `uploads/Quadro_Receitas_Completo_2026 (2).xlsx` (full recipe matrix), `uploads/Pedido
   1652340949691-01.xlsx` (a real Comfrio order), the real numbers from `uploads/Vendas_PLU.xlsx` (not
   tracked — see below), and `uploads/CONTAGEM ESTOQUE 25.2026.pdf`. Note: unlike migrations,
   `supabase/seed.sql` only auto-applies on `supabase db reset` (local dev) — against a remote/linked
@@ -177,12 +179,14 @@ per prato in `supabase/seed.sql` (idempotently, via an `update` that sets `padra
 assumed Wrap Frango Picante's padrão protein was Frango Crocante (convenient because that's what earlier
 testing happened to use, but not actually true) — the user corrected this directly: Wrap Frango
 Picante's real padrão protein is **Frango desfiado**. Current state, all confirmed live against real
-data: Wrap Frango Picante → Frango desfiado; **Wrap Crocante ao Pesto** and **Bowl da Fazenda** (two
-pratos created specifically for this, not present in the seed before) → Frango Crocante, both at 55g,
-matching the portion size used everywhere else Frango Crocante appears as a protein option. Those two
-new pratos only have a Proteína grupo — no `componentes_fixos` (base ingredients) were fabricated for
-them since that wasn't asked for, just the protein association needed to test Frango Crocante-related
-desperdício on dishes other than Wrap Frango Picante.
+data: Wrap Frango Picante → Frango desfiado (60g); **Wrap Crocante ao Pesto** and **Bowl da Fazenda**
+(two pratos created specifically for this, not present in the seed before) → Frango Crocante. **Corrected
+a second time**, once the full Quadro de Receitas was parsed programmatically (see "Quadro de Receitas
+matrix" section below): the real quantity is **70g**, not the 55g used here originally (an assumed
+"same as everywhere else" portion, picked before the sheet's actual per-dish value for these two pratos
+was known) — 70g also matches the Módulo 5 "Frango Crocante 70g (Proteína Extra)" modifier exactly.
+These two pratos initially only had a Proteína grupo — no `componentes_fixos` — but now have their full
+BASE + Salad Bar + Molho + Crocante components too, filled in by that same later full-cardápio import.
 
 **This whole `padrao` mechanism is scoped to the desperdício flow only** (see Frontend section —
 `desperdicio.js` no longer shows a selector, it silently uses whichever option has `padrao = true`).
@@ -499,19 +503,48 @@ protein was missing from the totals, not by any constraint. Matching ingredient 
 across independent VALUES lists is fragile — worth double-checking with a row-count sanity query after
 any future seed that joins on `nome` this way.
 
-### Quadro de Receitas matrix — structure to know before seeding more pratos
+### Quadro de Receitas matrix — structure (fully imported; see "Cardápio completo" in seed.sql)
 
-`uploads/Quadro_Receitas_Completo_2026 (2).xlsx` is ingredients-as-rows × pratos-as-columns, but rows
-are grouped into named sections (row with only column A filled = a section divider):
+`uploads/Quadro_Receitas_Completo_2026 (2).xlsx` is ingredients-as-rows × pratos-as-columns (35 real
+pratos, columns B onward), with rows grouped into named sections (row with only column A filled = a
+section divider): **BASE, SALAD BAR, PROTEÍNA, MOLHO, CROCANTE, COBERTURA, FINALIZAÇÃO**. A non-empty
+cell in a section for a given prato column is one item in that prato's section, at that cell's quantity
+(all cells in this sheet carry an explicit unit suffix — `g`, `ml`, or `uni` — no bare numbers to
+default). Fully imported programmatically into `pratos`/`receita_componentes`/
+`receita_grupos_variaveis`/`receita_opcoes_variaveis` (see `supabase/seed.sql`'s "Cardápio completo"
+section) — this is no longer just a seeding reference, it's live data for all 35 pratos.
 
-- **BASE** — always-included componentes_fixos.
-- **SALAD BAR, PROTEÍNA, MOLHO, CROCANTE, COBERTURA, FINALIZAÇÃO** — each is a `componentes_variaveis`
-  group; a non-empty cell in a section for a given prato column is one option in that prato's group for
-  that section, at that cell's quantity (bare numbers = grams; explicit suffixes like `1 uni`/`25ml`
-  override the default).
+**Correction to an earlier assumption in this doc, found only once the full sheet was parsed
+programmatically and cross-checked cell-by-cell**: only **PROTEÍNA** actually behaves as a "pick one"
+group — across all 35 pratos, no dish ever has more than one protein filled in simultaneously. Every
+other non-BASE section (SALAD BAR especially, but also MOLHO/CROCANTE/COBERTURA/FINALIZAÇÃO) routinely
+has **multiple simultaneous items for the same prato** (e.g. Bowl da Fazenda's Salad Bar is Tomate +
+Brócolis + Palmito ao pesto + Feijão com farofa, all included together, not a choice between them) — up
+to 5 simultaneous items in one section for one dish (Boal Tex Mex). So the import models **only
+Proteína** as `receita_grupos_variaveis` (+ `receita_opcoes_variaveis`, with `padrao = true` on the
+dish's one listed protein, same "assuma a proteína que consta na tabela" rule already established for
+Frango Crocante); **SALAD BAR/MOLHO/CROCANTE/COBERTURA/FINALIZAÇÃO are modeled as plain
+`receita_componentes`** (componentes_fixos), exactly like BASE — confirmed with the user before
+importing, since treating them all as variable groups would have under-counted consumption/desperdício
+for every item beyond the first in a multi-item section. Don't assume a dish is simple just because its
+name sounds fixed — but also don't assume a non-BASE section is a customer-facing choice just because
+it's not BASE.
 
-Almost every prato in the sheet has at least one variable group — very few (if any) are purely
-`tipo = 'fixo'`. Don't assume a dish is simple just because its name sounds fixed.
+**Also corrected during this import — a planilha cell-by-cell check contradicted what earlier sessions
+had assumed about Wrap Frango Picante**: this doc and `seed.sql` used to describe it as "the only prato
+where Frango crocante is a Proteína option," with all 6 catalog proteins (including Frango Crocante at
+55g) hand-typed in as options. The real sheet's PROTEÍNA row for Wrap Frango Picante's column is blank
+for everything except **Frango desfiado (60g)** — Frango crocante's cell for that specific dish is
+empty. Frango Crocante is a real Proteína option only in **Wrap Crocante ao Pesto** and **Bowl da
+Fazenda**, both at **70g** (not 55g — also corrected; 70g matches the Módulo 5 "Frango Crocante 70g
+(Proteína Extra)" modifier exactly, which is literally this same portion sold standalone). Corrected per
+explicit user instruction ("corrigir pela planilha") in `supabase/seed.sql`, right after the original
+Wrap Frango Picante Proteína block: deletes the 5 wrong options (and their
+`registro_desperdicio_opcoes_selecionadas` links — a few historical test waste records lose their
+protein attribution as a result, but the `registros_desperdicio` rows themselves are untouched), then
+corrects the 55g→70g quantity for the other two dishes. Lesson: a prose description in this doc of "what
+the spreadsheet says" is not a substitute for actually parsing it column-by-column — this wrong
+assumption survived multiple doc updates before a full programmatic import caught it.
 
 ## Intended architecture (from the product spec)
 

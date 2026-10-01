@@ -4,9 +4,14 @@
 --
 -- Fontes reais:
 --   - uploads/Quadro_Receitas_Completo_2026 (2).xlsx → receita do prato
---     "Wrap Frango Picante" (único prato onde "Frango crocante" aparece como
---     opção do grupo Proteína) — seção BASE (linhas 5-12) + seção PROTEÍNA
---     (linhas 36-41).
+--     "Wrap Frango Picante" — seção BASE (linhas 5-12) + seção PROTEÍNA
+--     (linhas 36-41). Nota (corrigida depois que o Quadro completo foi
+--     importado — ver seção "Cardápio completo" mais abaixo): esse prato NÃO
+--     é o único (nem sequer um) onde "Frango crocante" é opção de Proteína —
+--     na planilha real, a célula de Frango crocante pra esse prato está em
+--     branco; o prato de fato usa Frango desfiado (60g). Frango crocante só é
+--     opção real de Proteína em "Wrap Crocante ao Pesto" e "Bowl da Fazenda",
+--     a 70g.
 --   - uploads/Pedido 1652340949691-01.xlsx → item real da Comfrio
 --     "FRANGO EMPANADISSIMO CX4KG" (código 0101013100300), 1 caixa = 10
 --     pacotes de 400g.
@@ -161,13 +166,12 @@ where grupo_id = (
   );
 
 -- ----------------------------------------------------------------------------
--- Pratos de teste adicionais para Frango Crocante (indicados pelo usuário,
--- não extraídos do Quadro de Receitas — "Wrap Crocante ao Pesto" não tinha
--- valor na linha "Frango crocante" da planilha original). Modelagem mínima
--- só para exercitar o fluxo: grupo Proteína com uma única opção (Frango
--- Crocante, 55g — mesma quantidade usada nos demais pratos da família Wrap),
--- marcada como padrão. Sem componentes_fixos (base do prato) — fora do
--- escopo do que foi pedido, não inventado.
+-- Pratos de teste adicionais para Frango Crocante (indicados pelo usuário na
+-- época, com uma modelagem mínima provisória: só o grupo Proteína, Frango
+-- Crocante a 55g, sem componentes_fixos). Completados/corrigidos mais abaixo,
+-- na seção "Cardápio completo", depois que o Quadro de Receitas inteiro foi
+-- importado e revelou que a quantidade real é 70g (não 55g) e que esses dois
+-- pratos também têm BASE e outras seções que ainda não estavam cadastradas.
 -- ----------------------------------------------------------------------------
 
 insert into pratos (nome, tipo)
@@ -192,6 +196,56 @@ where p.nome in ('Wrap Crocante ao Pesto', 'Bowl da Fazenda') and g.nome = 'Prot
   and not exists (
     select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id
   );
+
+-- ----------------------------------------------------------------------------
+-- Correção — Quadro de Receitas completo (ver seção "Cardápio completo" mais
+-- abaixo) mostrou que "Wrap Frango Picante" tinha 6 opções de Proteína
+-- hipotéticas (todo o cardápio de proteínas), mas a planilha real só define
+-- Frango desfiado (60g) pra esse prato especificamente — todas as outras
+-- colunas da seção PROTEÍNA pra esse prato estão em branco. Corrigido por
+-- pedido explícito do usuário ("corrigir pela planilha"), mesmo sabendo que
+-- isso derruba o vínculo de registros de desperdício de teste antigos que
+-- selecionaram Frango Crocante nesse prato (registros_desperdicio em si
+-- continuam existindo — só perdem a opção de proteína associada).
+-- ----------------------------------------------------------------------------
+
+delete from registro_desperdicio_opcoes_selecionadas
+where opcao_id in (
+  select o.id
+  from receita_opcoes_variaveis o
+  join receita_grupos_variaveis g on g.id = o.grupo_id
+  join pratos p on p.id = g.prato_id
+  join ingredientes i on i.id = o.ingrediente_id
+  where p.nome = 'Wrap Frango Picante' and g.nome = 'Proteína'
+    and i.nome <> 'Frango desfiado'
+);
+
+delete from receita_opcoes_variaveis
+where id in (
+  select o.id
+  from receita_opcoes_variaveis o
+  join receita_grupos_variaveis g on g.id = o.grupo_id
+  join pratos p on p.id = g.prato_id
+  join ingredientes i on i.id = o.ingrediente_id
+  where p.nome = 'Wrap Frango Picante' and g.nome = 'Proteína'
+    and i.nome <> 'Frango desfiado'
+);
+
+-- Correção — Frango Crocante nessas duas receitas é 70g na planilha real, não
+-- 55g (valor usado antes por não termos o dado real desse prato específico na
+-- época). 70g também bate com o modificador "Frango Crocante 70g (Proteína
+-- Extra)" do Módulo 5, que é literalmente essa mesma porção vendida avulsa.
+update receita_opcoes_variaveis
+set quantidade = 70
+where id in (
+  select o.id
+  from receita_opcoes_variaveis o
+  join receita_grupos_variaveis g on g.id = o.grupo_id
+  join pratos p on p.id = g.prato_id
+  join ingredientes i on i.id = o.ingrediente_id
+  where p.nome in ('Wrap Crocante ao Pesto', 'Bowl da Fazenda')
+    and g.nome = 'Proteína' and i.nome = 'Frango Crocante'
+);
 
 -- ----------------------------------------------------------------------------
 -- Módulo 3 — Desperdício: 2 Wrap Frango Picante com Frango Crocante
@@ -498,6 +552,1047 @@ where codigo_fornecedor in (
   '0101013100041', -- KAY-5 SANITIZANTE
   '0101013100356'  -- QSR SAB LIQ ANTISSEPT 4X500ML
 );
+
+-- ============================================================================
+-- Cardápio completo (Quadro de Receitas 2026) — os demais 32 pratos além dos
+-- 3 já seedados pra validação de Frango Crocante. Importado programaticamente
+-- a partir de uploads/Quadro_Receitas_Completo_2026 (2).xlsx (ver CLAUDE.md,
+-- seção "Quadro de Receitas matrix", pra estrutura da planilha). Pedido pelo
+-- usuário pra que o combo de prato em desperdicio.html liste todas as opções
+-- reais do cardápio, não só os 3 usados na validação original.
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- Novos ingredientes usados só no Quadro de Receitas completo (sem
+-- correspondente no catálogo Comfrio nem na seed mínima original) — mesmo
+-- padrão da seção "ingredientes de apoio" (nome + unidade_base, sem código).
+-- ----------------------------------------------------------------------------
+
+insert into ingredientes (nome, unidade_base)
+select v.nome, v.unidade_base
+from (values
+  ('Saladinha caprese', 'g'),
+  ('Cenoura', 'g'),
+  ('Sunomono', 'g'),
+  ('Cebola roxa', 'g'),
+  ('Avocado', 'g'),
+  ('Molho gergelim', 'ml'),
+  ('Maçã crocante', 'g')
+) as v(nome, unidade_base)
+where not exists (select 1 from ingredientes i where i.nome = v.nome);
+
+-- ----------------------------------------------------------------------------
+-- Demais 32 pratos do Quadro de Receitas 2026 (os outros 3 —
+-- Wrap Frango Picante, Wrap Crocante ao Pesto, Bowl da Fazenda — já tinham
+-- cadastro, corrigido/completado acima). Todos "customizavel" (todos têm pelo
+-- menos um grupo Proteína ou ao menos uma seção de componente fixo variável
+-- por prato). "Crie seu Bowl" e "Crie Sua Salada" são build-your-own de
+-- verdade — a planilha só define a base (arroz/alface), sem estrutura de
+-- grupos por essas duas colunas; não inventamos grupos que a planilha não
+-- define.
+-- ----------------------------------------------------------------------------
+
+insert into pratos (nome, tipo)
+select v.nome, 'customizavel'
+from (values
+  ('Wrap Frango Caesar'),
+  ('Wrap Surf Salmon'),
+  ('Wrap Árabe'),
+  ('Wrap Parmegiana'),
+  ('Wrap Carne com Gorgonzola'),
+  ('Wrap Crocante 4 Queijos'),
+  ('Saladinha p/ Wraps'),
+  ('Sanduba Cheese Steak'),
+  ('Sanduba Buffalo Chicken'),
+  ('Sanduba Parmegiana'),
+  ('Sanduba Pesto Frango'),
+  ('Burrito Frango'),
+  ('Burrito Carne'),
+  ('Tostilha Búffala Derretida'),
+  ('Tostilha Frango e Parmesão'),
+  ('Tostilha Trio de Queijos'),
+  ('Boal Superprotein'),
+  ('Boal Tex Mex'),
+  ('Aloha Poke Boal'),
+  ('California Poke Boal'),
+  ('Hot Hawaii Poke Boal'),
+  ('Salada Hoje eu Começo'),
+  ('Salada Honey Crispy'),
+  ('Salada Frango Crocante'),
+  ('Salada Caesar Pasta'),
+  ('Salada Almond Caesar'),
+  ('Salada Caprese'),
+  ('Salada Crocante Almond Caesar'),
+  ('Fusilli hug'),
+  ('Bowl do Abraço'),
+  ('Crie seu Bowl'),
+  ('Crie Sua Salada')
+) as v(nome)
+where not exists (select 1 from pratos p where p.nome = v.nome);
+
+-- ----------------------------------------------------------------------------
+-- Componentes fixos (BASE + Salad Bar + Molho + Crocante + Cobertura +
+-- Finalização) de todos os 35 pratos, incluindo Wrap Crocante ao Pesto e
+-- Bowl da Fazenda (que só tinham o grupo Proteína até agora). Essas 5 seções
+-- não-BASE viram componente fixo, não grupo variável: a planilha real mostra
+-- vários itens simultâneos por prato nelas (ex. Bowl da Fazenda tem Tomate +
+-- Brócolis + Palmito + Feijão ao mesmo tempo no Salad Bar, não uma escolha
+-- entre eles) — só Proteína se comporta de fato como escolha única em toda a
+-- planilha (nenhum prato tem mais de uma proteína simultânea).
+-- ----------------------------------------------------------------------------
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Mix de alfaces', 'nome', 40, 'g'),
+  ('Tortilha', 'nome', 1, 'un'),
+  ('OVO DE CODORNA CONS.', 'nome', 3, 'un'),
+  ('TOMATE', 'nome', 30, 'g'),
+  ('QJO PARMESAO BURITIS', 'nome', 15, 'g'),
+  ('MOLHO BUFALLO RANCH', 'nome', 25, 'ml'),
+  ('CROUTON INTEGRAL', 'nome', 10, 'g'),
+  ('CHIPS MIX BATAT DOCE', 'nome', 40, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Wrap Frango Picante'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Mix de alfaces', 'nome', 40, 'g'),
+  ('Tortilha', 'nome', 1, 'un'),
+  ('Cream cheese', 'nome', 25, 'g'),
+  ('Saladinha caprese', 'nome', 30, 'g'),
+  ('MOLHO PESTO', 'nome', 15, 'ml'),
+  ('CHIPS MIX BATAT DOCE', 'nome', 40, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Wrap Crocante ao Pesto'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Mix de alfaces', 'nome', 40, 'g'),
+  ('Tortilha', 'nome', 1, 'un'),
+  ('QJO PARMESAO BURITIS', 'nome', 15, 'g'),
+  ('MOLHO CAESAR', 'nome', 25, 'ml'),
+  ('CROUTON INTEGRAL', 'nome', 10, 'g'),
+  ('CHIPS MIX BATAT DOCE', 'nome', 40, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Wrap Frango Caesar'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Mix de alfaces', 'nome', 40, 'g'),
+  ('Tortilha', 'nome', 1, 'un'),
+  ('Cream cheese', 'nome', 25, 'g'),
+  ('Cenoura', 'nome', 30, 'g'),
+  ('Sunomono', 'nome', 30, 'g'),
+  ('Cebola roxa', 'nome', 30, 'g'),
+  ('MOLHO HONEY MUSTARD', 'nome', 15, 'ml'),
+  ('MOLHO POKE', 'nome', 20, 'ml'),
+  ('CHIPS MIX BATAT DOCE', 'nome', 40, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Wrap Surf Salmon'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Mix de alfaces', 'nome', 40, 'g'),
+  ('Tortilha', 'nome', 1, 'un'),
+  ('Homus', 'nome', 30, 'g'),
+  ('TOMATE', 'nome', 30, 'g'),
+  ('Cebola roxa', 'nome', 30, 'g'),
+  ('AZEITONA PRETA FAT', 'nome', 30, 'g'),
+  ('Molho gergelim', 'nome', 25, 'ml'),
+  ('CHIPS MIX BATAT DOCE', 'nome', 40, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Wrap Árabe'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Tortilha', 'nome', 1, 'un'),
+  ('Cream cheese', 'nome', 25, 'g'),
+  ('MUSSARELA FIORLAT', 'nome', 60, 'g'),
+  ('RICOTA FRESCA BURITIS APROX 400GR', 'nome', 30, 'g'),
+  ('EXTRATO DE TOMATE', 'nome', 30, 'ml'),
+  ('CHIPS MIX BATAT DOCE', 'nome', 40, 'g'),
+  ('EXTRATO DE TOMATE', 'nome', 5, 'ml'),
+  ('QJO PARMESAO BURITIS', 'nome', 10, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Wrap Parmegiana'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Tortilha', 'nome', 1, 'un'),
+  ('Cream cheese', 'nome', 25, 'g'),
+  ('TOMATE', 'nome', 30, 'g'),
+  ('MUSSARELA FIORLAT', 'nome', 60, 'g'),
+  ('QJO GORGONZOLA VIGOR', 'nome', 25, 'g'),
+  ('RICOTA FRESCA BURITIS APROX 400GR', 'nome', 30, 'g'),
+  ('CHIPS MIX BATAT DOCE', 'nome', 40, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Wrap Carne com Gorgonzola'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Tortilha', 'nome', 1, 'un'),
+  ('Cream cheese', 'nome', 25, 'g'),
+  ('MUSSARELA FIORLAT', 'nome', 60, 'g'),
+  ('QJO GORGONZOLA VIGOR', 'nome', 25, 'g'),
+  ('RICOTA FRESCA BURITIS APROX 400GR', 'nome', 60, 'g'),
+  ('CHIPS MIX BATAT DOCE', 'nome', 40, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Wrap Crocante 4 Queijos'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Folhas estação', 'nome', 40, 'g'),
+  ('Saladinha caprese', 'nome', 30, 'g'),
+  ('CROUTON INTEGRAL', 'nome', 10, 'g'),
+  ('MOLHO CAESAR', 'nome', 25, 'ml'),
+  ('CHIPS MIX BATAT DOCE', 'nome', 40, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Saladinha p/ Wraps'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Cream cheese', 'nome', 25, 'g'),
+  ('Pão ciabatta', 'nome', 1, 'un'),
+  ('Cebola roxa', 'nome', 30, 'g'),
+  ('MUSSARELA FIORLAT', 'nome', 30, 'g'),
+  ('CEBOLA CRISPY', 'nome', 10, 'g'),
+  ('MOLHO BUFALLO RANCH', 'nome', 25, 'ml')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Sanduba Cheese Steak'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Cream cheese', 'nome', 25, 'g'),
+  ('Pão ciabatta', 'nome', 1, 'un'),
+  ('MUSSARELA FIORLAT', 'nome', 30, 'g'),
+  ('QJO GORGONZOLA VIGOR', 'nome', 25, 'g'),
+  ('MOLHO BUFALLO RANCH', 'nome', 25, 'ml')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Sanduba Buffalo Chicken'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Cream cheese', 'nome', 25, 'g'),
+  ('Pão ciabatta', 'nome', 1, 'un'),
+  ('MUSSARELA FIORLAT', 'nome', 30, 'g'),
+  ('EXTRATO DE TOMATE', 'nome', 30, 'ml')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Sanduba Parmegiana'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Pão ciabatta', 'nome', 1, 'un'),
+  ('MUSSARELA FIORLAT', 'nome', 60, 'g'),
+  ('MOLHO PESTO', 'nome', 25, 'ml'),
+  ('AMENDOA', 'nome', 10, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Sanduba Pesto Frango'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Tortilha', 'nome', 1, 'un'),
+  ('Mix de arroz', 'nome', 50, 'g'),
+  ('TOMATE', 'nome', 30, 'g'),
+  ('Cebola roxa', 'nome', 30, 'g'),
+  ('MUSSARELA FIORLAT', 'nome', 30, 'g'),
+  ('MOLHO BUFALLO RANCH', 'nome', 50, 'ml'),
+  ('Avocado', 'nome', 50, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Burrito Frango'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Tortilha', 'nome', 1, 'un'),
+  ('Mix de arroz', 'nome', 50, 'g'),
+  ('TOMATE', 'nome', 30, 'g'),
+  ('Cebola roxa', 'nome', 30, 'g'),
+  ('MUSSARELA FIORLAT', 'nome', 30, 'g'),
+  ('MOLHO BUFALLO RANCH', 'nome', 50, 'ml'),
+  ('Avocado', 'nome', 50, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Burrito Carne'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Tortilha', 'nome', 1, 'un'),
+  ('Cream cheese', 'nome', 25, 'g'),
+  ('TOMATE', 'nome', 15, 'g'),
+  ('AZEITONA PRETA FAT', 'nome', 15, 'g'),
+  ('MUSSARELA FIORLAT', 'nome', 30, 'g'),
+  ('MUSSARELA DE BUFALA', 'nome', 3, 'un')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Tostilha Búffala Derretida'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Tortilha', 'nome', 1, 'un'),
+  ('Cream cheese', 'nome', 25, 'g'),
+  ('QJO PARMESAO BURITIS', 'nome', 15, 'g'),
+  ('MUSSARELA FIORLAT', 'nome', 30, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Tostilha Frango e Parmesão'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Tortilha', 'nome', 1, 'un'),
+  ('Cream cheese', 'nome', 25, 'g'),
+  ('QJO PARMESAO BURITIS', 'nome', 15, 'g'),
+  ('MUSSARELA FIORLAT', 'nome', 30, 'g'),
+  ('QJO GORGONZOLA VIGOR', 'nome', 25, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Tostilha Trio de Queijos'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Mix de arroz', 'nome', 150, 'g'),
+  ('TOMATE', 'nome', 30, 'g'),
+  ('BROCOLIS GRANO', 'nome', 30, 'g'),
+  ('PALMITO PUP PICADO', 'nome', 30, 'g'),
+  ('TEMP-003', 'codigo', 50, 'g'),
+  ('MOLHO LIMAO AZEITE', 'nome', 25, 'ml'),
+  ('CHIPS MIX BATAT DOCE', 'nome', 10, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Bowl da Fazenda'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Mix de arroz', 'nome', 150, 'g'),
+  ('OVO DE CODORNA CONS.', 'nome', 3, 'un'),
+  ('RICOTA FRESCA BURITIS APROX 400GR', 'nome', 30, 'g'),
+  ('TEMP-003', 'codigo', 50, 'g'),
+  ('Homus', 'nome', 30, 'g'),
+  ('Molho gergelim', 'nome', 25, 'ml')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Boal Superprotein'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Mix de alfaces', 'nome', 40, 'g'),
+  ('Mix de arroz', 'nome', 150, 'g'),
+  ('TOMATE', 'nome', 30, 'g'),
+  ('Cebola roxa', 'nome', 30, 'g'),
+  ('Cream cheese', 'nome', 25, 'g'),
+  ('MILHO DOCE', 'nome', 30, 'g'),
+  ('Avocado', 'nome', 50, 'g'),
+  ('MOLHO BUFALLO RANCH', 'nome', 25, 'ml'),
+  ('CEBOLA CRISPY', 'nome', 10, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Boal Tex Mex'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Mix de arroz', 'nome', 150, 'g'),
+  ('TOMATE', 'nome', 30, 'g'),
+  ('Sunomono', 'nome', 30, 'g'),
+  ('Cebola roxa', 'nome', 30, 'g'),
+  ('Cream cheese', 'nome', 25, 'g'),
+  ('MOLHO HONEY MUSTARD', 'nome', 25, 'ml'),
+  ('CHIPS MIX BATAT DOCE', 'nome', 10, 'g'),
+  ('MOLHO POKE', 'nome', 20, 'ml'),
+  ('GERGELIM PRETO', 'nome', 2, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Aloha Poke Boal'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Mix de arroz', 'nome', 150, 'g'),
+  ('TOMATE', 'nome', 30, 'g'),
+  ('Cenoura', 'nome', 30, 'g'),
+  ('Sunomono', 'nome', 30, 'g'),
+  ('Avocado', 'nome', 50, 'g'),
+  ('MOLHO TERIRIAKY', 'nome', 25, 'ml'),
+  ('CHIPS MIX BATAT DOCE', 'nome', 10, 'g'),
+  ('MOLHO POKE', 'nome', 20, 'ml'),
+  ('GERGELIM PRETO', 'nome', 2, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'California Poke Boal'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Mix de arroz', 'nome', 150, 'g'),
+  ('Cebola roxa', 'nome', 30, 'g'),
+  ('BROCOLIS GRANO', 'nome', 30, 'g'),
+  ('Cream cheese', 'nome', 25, 'g'),
+  ('Avocado', 'nome', 50, 'g'),
+  ('MOLHO BUFALLO RANCH', 'nome', 25, 'ml'),
+  ('CHIPS MIX BATAT DOCE', 'nome', 10, 'g'),
+  ('MOLHO POKE', 'nome', 20, 'ml'),
+  ('GERGELIM PRETO', 'nome', 2, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Hot Hawaii Poke Boal'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Mix de alfaces', 'nome', 100, 'g'),
+  ('OVO DE CODORNA CONS.', 'nome', 3, 'un'),
+  ('Cenoura', 'nome', 30, 'g'),
+  ('Cebola roxa', 'nome', 30, 'g'),
+  ('RICOTA FRESCA BURITIS APROX 400GR', 'nome', 30, 'g'),
+  ('MOLHO HONEY MUSTARD', 'nome', 50, 'ml'),
+  ('Maçã crocante', 'nome', 10, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Salada Hoje eu Começo'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Mix de alfaces', 'nome', 100, 'g'),
+  ('TOMATE', 'nome', 30, 'g'),
+  ('QJO GORGONZOLA VIGOR', 'nome', 25, 'g'),
+  ('PALMITO PUP PICADO', 'nome', 30, 'g'),
+  ('MOLHO HONEY MUSTARD', 'nome', 50, 'ml'),
+  ('CEBOLA CRISPY', 'nome', 10, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Salada Honey Crispy'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Mix de alfaces', 'nome', 100, 'g'),
+  ('OVO DE CODORNA CONS.', 'nome', 3, 'un'),
+  ('TOMATE', 'nome', 30, 'g'),
+  ('MILHO DOCE', 'nome', 30, 'g'),
+  ('MOLHO BUFALLO RANCH', 'nome', 40, 'ml'),
+  ('QJO PARMESAO BURITIS', 'nome', 15, 'g'),
+  ('CROUTON INTEGRAL', 'nome', 10, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Salada Frango Crocante'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Mix de alfaces', 'nome', 40, 'g'),
+  ('Pasta salad', 'nome', 125, 'g'),
+  ('TOMATE', 'nome', 30, 'g'),
+  ('MOLHO CAESAR', 'nome', 50, 'ml'),
+  ('QJO PARMESAO BURITIS', 'nome', 15, 'g'),
+  ('CROUTON INTEGRAL', 'nome', 10, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Salada Caesar Pasta'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Mix de alfaces', 'nome', 100, 'g'),
+  ('MOLHO CAESAR', 'nome', 50, 'ml'),
+  ('AMENDOA', 'nome', 10, 'g'),
+  ('QJO PARMESAO BURITIS', 'nome', 15, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Salada Almond Caesar'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Mix de alfaces', 'nome', 100, 'g'),
+  ('Saladinha caprese', 'nome', 60, 'g'),
+  ('AZEITONA PRETA FAT', 'nome', 30, 'g'),
+  ('MUSSARELA DE BUFALA', 'nome', 3, 'un')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Salada Caprese'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Mix de alfaces', 'nome', 100, 'g'),
+  ('MOLHO CAESAR', 'nome', 50, 'ml'),
+  ('AMENDOA', 'nome', 10, 'g'),
+  ('CROUTON INTEGRAL', 'nome', 10, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Salada Crocante Almond Caesar'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Pasta salad', 'nome', 250, 'g'),
+  ('AZEITONA PRETA FAT', 'nome', 30, 'g'),
+  ('QJO GORGONZOLA VIGOR', 'nome', 30, 'g'),
+  ('Cream cheese', 'nome', 50, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Fusilli hug'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Mix de arroz', 'nome', 200, 'g'),
+  ('QJO PARMESAO BURITIS', 'nome', 15, 'g'),
+  ('MUSSARELA FIORLAT', 'nome', 30, 'g'),
+  ('Cream cheese', 'nome', 50, 'g'),
+  ('MOLHO LIMAO AZEITE', 'nome', 75, 'ml')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Bowl do Abraço'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Mix de arroz', 'nome', 150, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Crie seu Bowl'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+insert into receita_componentes (prato_id, ingrediente_id, quantidade, unidade)
+select p.id, i.id, v.quantidade, v.unidade
+from pratos p
+join (values
+  ('Mix de alfaces', 'nome', 100, 'g')
+) as v(ing_key, ing_by, quantidade, unidade) on true
+join ingredientes i on (v.ing_by = 'nome' and i.nome = v.ing_key) or (v.ing_by = 'codigo' and i.codigo_fornecedor = v.ing_key)
+where p.nome = 'Crie Sua Salada'
+  and not exists (
+    select 1 from receita_componentes rc where rc.prato_id = p.id and rc.ingrediente_id = i.id
+  );
+
+-- ----------------------------------------------------------------------------
+-- Grupo Proteína dos demais pratos (escolha única, com padrão = a única
+-- proteína listada na planilha pra aquele prato — mesma regra já usada em
+-- Wrap Frango Picante/Wrap Crocante ao Pesto/Bowl da Fazenda: "assuma que a
+-- proteína utilizada no prato selecionado é a que consta na tabela de
+-- ingredientes por prato"). Nenhum prato na planilha tem mais de uma
+-- proteína simultânea, então o padrão aqui não é uma suposição nova.
+-- ----------------------------------------------------------------------------
+
+insert into receita_grupos_variaveis (prato_id, nome, obrigatorio)
+select p.id, 'Proteína', true
+from pratos p
+where p.nome = 'Wrap Frango Caesar'
+  and not exists (select 1 from receita_grupos_variaveis g where g.prato_id = p.id and g.nome = 'Proteína');
+
+insert into receita_opcoes_variaveis (grupo_id, ingrediente_id, quantidade, unidade, padrao)
+select g.id, i.id, 60, 'g', true
+from receita_grupos_variaveis g
+join pratos p on p.id = g.prato_id
+join ingredientes i on i.nome = 'Frango desfiado'
+where p.nome = 'Wrap Frango Caesar' and g.nome = 'Proteína'
+  and not exists (select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id);
+
+insert into receita_grupos_variaveis (prato_id, nome, obrigatorio)
+select p.id, 'Proteína', true
+from pratos p
+where p.nome = 'Wrap Surf Salmon'
+  and not exists (select 1 from receita_grupos_variaveis g where g.prato_id = p.id and g.nome = 'Proteína');
+
+insert into receita_opcoes_variaveis (grupo_id, ingrediente_id, quantidade, unidade, padrao)
+select g.id, i.id, 80, 'g', true
+from receita_grupos_variaveis g
+join pratos p on p.id = g.prato_id
+join ingredientes i on i.nome = 'Salmão'
+where p.nome = 'Wrap Surf Salmon' and g.nome = 'Proteína'
+  and not exists (select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id);
+
+insert into receita_grupos_variaveis (prato_id, nome, obrigatorio)
+select p.id, 'Proteína', true
+from pratos p
+where p.nome = 'Wrap Árabe'
+  and not exists (select 1 from receita_grupos_variaveis g where g.prato_id = p.id and g.nome = 'Proteína');
+
+insert into receita_opcoes_variaveis (grupo_id, ingrediente_id, quantidade, unidade, padrao)
+select g.id, i.id, 3, 'un', true
+from receita_grupos_variaveis g
+join pratos p on p.id = g.prato_id
+join ingredientes i on i.nome = 'Falafel'
+where p.nome = 'Wrap Árabe' and g.nome = 'Proteína'
+  and not exists (select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id);
+
+insert into receita_grupos_variaveis (prato_id, nome, obrigatorio)
+select p.id, 'Proteína', true
+from pratos p
+where p.nome = 'Wrap Parmegiana'
+  and not exists (select 1 from receita_grupos_variaveis g where g.prato_id = p.id and g.nome = 'Proteína');
+
+insert into receita_opcoes_variaveis (grupo_id, ingrediente_id, quantidade, unidade, padrao)
+select g.id, i.id, 90, 'g', true
+from receita_grupos_variaveis g
+join pratos p on p.id = g.prato_id
+join ingredientes i on i.nome = 'Frango em cubos'
+where p.nome = 'Wrap Parmegiana' and g.nome = 'Proteína'
+  and not exists (select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id);
+
+insert into receita_grupos_variaveis (prato_id, nome, obrigatorio)
+select p.id, 'Proteína', true
+from pratos p
+where p.nome = 'Wrap Carne com Gorgonzola'
+  and not exists (select 1 from receita_grupos_variaveis g where g.prato_id = p.id and g.nome = 'Proteína');
+
+insert into receita_opcoes_variaveis (grupo_id, ingrediente_id, quantidade, unidade, padrao)
+select g.id, i.id, 60, 'g', true
+from receita_grupos_variaveis g
+join pratos p on p.id = g.prato_id
+join ingredientes i on i.nome = 'Carne desfiada'
+where p.nome = 'Wrap Carne com Gorgonzola' and g.nome = 'Proteína'
+  and not exists (select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id);
+
+insert into receita_grupos_variaveis (prato_id, nome, obrigatorio)
+select p.id, 'Proteína', true
+from pratos p
+where p.nome = 'Wrap Crocante 4 Queijos'
+  and not exists (select 1 from receita_grupos_variaveis g where g.prato_id = p.id and g.nome = 'Proteína');
+
+insert into receita_opcoes_variaveis (grupo_id, ingrediente_id, quantidade, unidade, padrao)
+select g.id, i.id, 70, 'g', true
+from receita_grupos_variaveis g
+join pratos p on p.id = g.prato_id
+join ingredientes i on i.nome = 'Frango Crocante'
+where p.nome = 'Wrap Crocante 4 Queijos' and g.nome = 'Proteína'
+  and not exists (select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id);
+
+insert into receita_grupos_variaveis (prato_id, nome, obrigatorio)
+select p.id, 'Proteína', true
+from pratos p
+where p.nome = 'Sanduba Cheese Steak'
+  and not exists (select 1 from receita_grupos_variaveis g where g.prato_id = p.id and g.nome = 'Proteína');
+
+insert into receita_opcoes_variaveis (grupo_id, ingrediente_id, quantidade, unidade, padrao)
+select g.id, i.id, 60, 'g', true
+from receita_grupos_variaveis g
+join pratos p on p.id = g.prato_id
+join ingredientes i on i.nome = 'Carne desfiada'
+where p.nome = 'Sanduba Cheese Steak' and g.nome = 'Proteína'
+  and not exists (select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id);
+
+insert into receita_grupos_variaveis (prato_id, nome, obrigatorio)
+select p.id, 'Proteína', true
+from pratos p
+where p.nome = 'Sanduba Buffalo Chicken'
+  and not exists (select 1 from receita_grupos_variaveis g where g.prato_id = p.id and g.nome = 'Proteína');
+
+insert into receita_opcoes_variaveis (grupo_id, ingrediente_id, quantidade, unidade, padrao)
+select g.id, i.id, 70, 'g', true
+from receita_grupos_variaveis g
+join pratos p on p.id = g.prato_id
+join ingredientes i on i.nome = 'Frango Crocante'
+where p.nome = 'Sanduba Buffalo Chicken' and g.nome = 'Proteína'
+  and not exists (select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id);
+
+insert into receita_grupos_variaveis (prato_id, nome, obrigatorio)
+select p.id, 'Proteína', true
+from pratos p
+where p.nome = 'Sanduba Parmegiana'
+  and not exists (select 1 from receita_grupos_variaveis g where g.prato_id = p.id and g.nome = 'Proteína');
+
+insert into receita_opcoes_variaveis (grupo_id, ingrediente_id, quantidade, unidade, padrao)
+select g.id, i.id, 90, 'g', true
+from receita_grupos_variaveis g
+join pratos p on p.id = g.prato_id
+join ingredientes i on i.nome = 'Frango em cubos'
+where p.nome = 'Sanduba Parmegiana' and g.nome = 'Proteína'
+  and not exists (select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id);
+
+insert into receita_grupos_variaveis (prato_id, nome, obrigatorio)
+select p.id, 'Proteína', true
+from pratos p
+where p.nome = 'Sanduba Pesto Frango'
+  and not exists (select 1 from receita_grupos_variaveis g where g.prato_id = p.id and g.nome = 'Proteína');
+
+insert into receita_opcoes_variaveis (grupo_id, ingrediente_id, quantidade, unidade, padrao)
+select g.id, i.id, 60, 'g', true
+from receita_grupos_variaveis g
+join pratos p on p.id = g.prato_id
+join ingredientes i on i.nome = 'Frango desfiado'
+where p.nome = 'Sanduba Pesto Frango' and g.nome = 'Proteína'
+  and not exists (select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id);
+
+insert into receita_grupos_variaveis (prato_id, nome, obrigatorio)
+select p.id, 'Proteína', true
+from pratos p
+where p.nome = 'Burrito Frango'
+  and not exists (select 1 from receita_grupos_variaveis g where g.prato_id = p.id and g.nome = 'Proteína');
+
+insert into receita_opcoes_variaveis (grupo_id, ingrediente_id, quantidade, unidade, padrao)
+select g.id, i.id, 60, 'g', true
+from receita_grupos_variaveis g
+join pratos p on p.id = g.prato_id
+join ingredientes i on i.nome = 'Frango desfiado'
+where p.nome = 'Burrito Frango' and g.nome = 'Proteína'
+  and not exists (select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id);
+
+insert into receita_grupos_variaveis (prato_id, nome, obrigatorio)
+select p.id, 'Proteína', true
+from pratos p
+where p.nome = 'Burrito Carne'
+  and not exists (select 1 from receita_grupos_variaveis g where g.prato_id = p.id and g.nome = 'Proteína');
+
+insert into receita_opcoes_variaveis (grupo_id, ingrediente_id, quantidade, unidade, padrao)
+select g.id, i.id, 60, 'g', true
+from receita_grupos_variaveis g
+join pratos p on p.id = g.prato_id
+join ingredientes i on i.nome = 'Carne desfiada'
+where p.nome = 'Burrito Carne' and g.nome = 'Proteína'
+  and not exists (select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id);
+
+insert into receita_grupos_variaveis (prato_id, nome, obrigatorio)
+select p.id, 'Proteína', true
+from pratos p
+where p.nome = 'Tostilha Frango e Parmesão'
+  and not exists (select 1 from receita_grupos_variaveis g where g.prato_id = p.id and g.nome = 'Proteína');
+
+insert into receita_opcoes_variaveis (grupo_id, ingrediente_id, quantidade, unidade, padrao)
+select g.id, i.id, 30, 'g', true
+from receita_grupos_variaveis g
+join pratos p on p.id = g.prato_id
+join ingredientes i on i.nome = 'Frango desfiado'
+where p.nome = 'Tostilha Frango e Parmesão' and g.nome = 'Proteína'
+  and not exists (select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id);
+
+insert into receita_grupos_variaveis (prato_id, nome, obrigatorio)
+select p.id, 'Proteína', true
+from pratos p
+where p.nome = 'Boal Superprotein'
+  and not exists (select 1 from receita_grupos_variaveis g where g.prato_id = p.id and g.nome = 'Proteína');
+
+insert into receita_opcoes_variaveis (grupo_id, ingrediente_id, quantidade, unidade, padrao)
+select g.id, i.id, 90, 'g', true
+from receita_grupos_variaveis g
+join pratos p on p.id = g.prato_id
+join ingredientes i on i.nome = 'Frango em cubos'
+where p.nome = 'Boal Superprotein' and g.nome = 'Proteína'
+  and not exists (select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id);
+
+insert into receita_grupos_variaveis (prato_id, nome, obrigatorio)
+select p.id, 'Proteína', true
+from pratos p
+where p.nome = 'Boal Tex Mex'
+  and not exists (select 1 from receita_grupos_variaveis g where g.prato_id = p.id and g.nome = 'Proteína');
+
+insert into receita_opcoes_variaveis (grupo_id, ingrediente_id, quantidade, unidade, padrao)
+select g.id, i.id, 60, 'g', true
+from receita_grupos_variaveis g
+join pratos p on p.id = g.prato_id
+join ingredientes i on i.nome = 'Carne desfiada'
+where p.nome = 'Boal Tex Mex' and g.nome = 'Proteína'
+  and not exists (select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id);
+
+insert into receita_grupos_variaveis (prato_id, nome, obrigatorio)
+select p.id, 'Proteína', true
+from pratos p
+where p.nome = 'Aloha Poke Boal'
+  and not exists (select 1 from receita_grupos_variaveis g where g.prato_id = p.id and g.nome = 'Proteína');
+
+insert into receita_opcoes_variaveis (grupo_id, ingrediente_id, quantidade, unidade, padrao)
+select g.id, i.id, 80, 'g', true
+from receita_grupos_variaveis g
+join pratos p on p.id = g.prato_id
+join ingredientes i on i.nome = 'Salmão'
+where p.nome = 'Aloha Poke Boal' and g.nome = 'Proteína'
+  and not exists (select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id);
+
+insert into receita_grupos_variaveis (prato_id, nome, obrigatorio)
+select p.id, 'Proteína', true
+from pratos p
+where p.nome = 'California Poke Boal'
+  and not exists (select 1 from receita_grupos_variaveis g where g.prato_id = p.id and g.nome = 'Proteína');
+
+insert into receita_opcoes_variaveis (grupo_id, ingrediente_id, quantidade, unidade, padrao)
+select g.id, i.id, 70, 'g', true
+from receita_grupos_variaveis g
+join pratos p on p.id = g.prato_id
+join ingredientes i on i.nome = 'Frango Crocante'
+where p.nome = 'California Poke Boal' and g.nome = 'Proteína'
+  and not exists (select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id);
+
+insert into receita_grupos_variaveis (prato_id, nome, obrigatorio)
+select p.id, 'Proteína', true
+from pratos p
+where p.nome = 'Hot Hawaii Poke Boal'
+  and not exists (select 1 from receita_grupos_variaveis g where g.prato_id = p.id and g.nome = 'Proteína');
+
+insert into receita_opcoes_variaveis (grupo_id, ingrediente_id, quantidade, unidade, padrao)
+select g.id, i.id, 80, 'g', true
+from receita_grupos_variaveis g
+join pratos p on p.id = g.prato_id
+join ingredientes i on i.nome = 'Salmão'
+where p.nome = 'Hot Hawaii Poke Boal' and g.nome = 'Proteína'
+  and not exists (select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id);
+
+insert into receita_grupos_variaveis (prato_id, nome, obrigatorio)
+select p.id, 'Proteína', true
+from pratos p
+where p.nome = 'Salada Hoje eu Começo'
+  and not exists (select 1 from receita_grupos_variaveis g where g.prato_id = p.id and g.nome = 'Proteína');
+
+insert into receita_opcoes_variaveis (grupo_id, ingrediente_id, quantidade, unidade, padrao)
+select g.id, i.id, 60, 'g', true
+from receita_grupos_variaveis g
+join pratos p on p.id = g.prato_id
+join ingredientes i on i.nome = 'Frango desfiado'
+where p.nome = 'Salada Hoje eu Começo' and g.nome = 'Proteína'
+  and not exists (select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id);
+
+insert into receita_grupos_variaveis (prato_id, nome, obrigatorio)
+select p.id, 'Proteína', true
+from pratos p
+where p.nome = 'Salada Honey Crispy'
+  and not exists (select 1 from receita_grupos_variaveis g where g.prato_id = p.id and g.nome = 'Proteína');
+
+insert into receita_opcoes_variaveis (grupo_id, ingrediente_id, quantidade, unidade, padrao)
+select g.id, i.id, 70, 'g', true
+from receita_grupos_variaveis g
+join pratos p on p.id = g.prato_id
+join ingredientes i on i.nome = 'Frango Crocante'
+where p.nome = 'Salada Honey Crispy' and g.nome = 'Proteína'
+  and not exists (select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id);
+
+insert into receita_grupos_variaveis (prato_id, nome, obrigatorio)
+select p.id, 'Proteína', true
+from pratos p
+where p.nome = 'Salada Frango Crocante'
+  and not exists (select 1 from receita_grupos_variaveis g where g.prato_id = p.id and g.nome = 'Proteína');
+
+insert into receita_opcoes_variaveis (grupo_id, ingrediente_id, quantidade, unidade, padrao)
+select g.id, i.id, 70, 'g', true
+from receita_grupos_variaveis g
+join pratos p on p.id = g.prato_id
+join ingredientes i on i.nome = 'Frango Crocante'
+where p.nome = 'Salada Frango Crocante' and g.nome = 'Proteína'
+  and not exists (select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id);
+
+insert into receita_grupos_variaveis (prato_id, nome, obrigatorio)
+select p.id, 'Proteína', true
+from pratos p
+where p.nome = 'Salada Caesar Pasta'
+  and not exists (select 1 from receita_grupos_variaveis g where g.prato_id = p.id and g.nome = 'Proteína');
+
+insert into receita_opcoes_variaveis (grupo_id, ingrediente_id, quantidade, unidade, padrao)
+select g.id, i.id, 60, 'g', true
+from receita_grupos_variaveis g
+join pratos p on p.id = g.prato_id
+join ingredientes i on i.nome = 'Frango desfiado'
+where p.nome = 'Salada Caesar Pasta' and g.nome = 'Proteína'
+  and not exists (select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id);
+
+insert into receita_grupos_variaveis (prato_id, nome, obrigatorio)
+select p.id, 'Proteína', true
+from pratos p
+where p.nome = 'Salada Almond Caesar'
+  and not exists (select 1 from receita_grupos_variaveis g where g.prato_id = p.id and g.nome = 'Proteína');
+
+insert into receita_opcoes_variaveis (grupo_id, ingrediente_id, quantidade, unidade, padrao)
+select g.id, i.id, 90, 'g', true
+from receita_grupos_variaveis g
+join pratos p on p.id = g.prato_id
+join ingredientes i on i.nome = 'Frango em cubos'
+where p.nome = 'Salada Almond Caesar' and g.nome = 'Proteína'
+  and not exists (select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id);
+
+insert into receita_grupos_variaveis (prato_id, nome, obrigatorio)
+select p.id, 'Proteína', true
+from pratos p
+where p.nome = 'Salada Crocante Almond Caesar'
+  and not exists (select 1 from receita_grupos_variaveis g where g.prato_id = p.id and g.nome = 'Proteína');
+
+insert into receita_opcoes_variaveis (grupo_id, ingrediente_id, quantidade, unidade, padrao)
+select g.id, i.id, 70, 'g', true
+from receita_grupos_variaveis g
+join pratos p on p.id = g.prato_id
+join ingredientes i on i.nome = 'Frango Crocante'
+where p.nome = 'Salada Crocante Almond Caesar' and g.nome = 'Proteína'
+  and not exists (select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id);
+
+insert into receita_grupos_variaveis (prato_id, nome, obrigatorio)
+select p.id, 'Proteína', true
+from pratos p
+where p.nome = 'Bowl do Abraço'
+  and not exists (select 1 from receita_grupos_variaveis g where g.prato_id = p.id and g.nome = 'Proteína');
+
+insert into receita_opcoes_variaveis (grupo_id, ingrediente_id, quantidade, unidade, padrao)
+select g.id, i.id, 70, 'g', true
+from receita_grupos_variaveis g
+join pratos p on p.id = g.prato_id
+join ingredientes i on i.nome = 'Frango Crocante'
+where p.nome = 'Bowl do Abraço' and g.nome = 'Proteína'
+  and not exists (select 1 from receita_opcoes_variaveis o where o.grupo_id = g.id and o.ingrediente_id = i.id);
 
 -- ----------------------------------------------------------------------------
 -- Verificação manual (não faz parte do seed — só para conferir o resultado):
