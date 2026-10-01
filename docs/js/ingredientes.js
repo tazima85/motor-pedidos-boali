@@ -8,8 +8,8 @@ const msg = document.getElementById('msg');
 const filtroInput = document.getElementById('filtro');
 const salvarBtn = document.getElementById('salvar-btn');
 
-let ingredientes = []; // { id, codigo, nome, posicao, unidade, oculto }
-const pendencias = {}; // id -> { nome?, posicao?, unidade?, oculto? }
+let ingredientes = []; // { id, codigo, nome, posicao, unidade, alimento, oculto }
+const pendencias = {}; // id -> { nome?, posicao?, unidade?, alimento?, oculto? }
 let sortKey = 'nome';
 let sortDir = 'asc';
 let filtro = '';
@@ -17,7 +17,7 @@ let filtro = '';
 async function carregar() {
   const { data, error } = await supabase
     .from('ingredientes')
-    .select('id, codigo_fornecedor, nome, unidade_contagem_padrao, oculto_contagem, setor:setores(ordem)')
+    .select('id, codigo_fornecedor, nome, unidade_contagem_padrao, eh_alimento, oculto_contagem, setor:setores(ordem)')
     .eq('ativo', true);
 
   if (error) {
@@ -31,6 +31,7 @@ async function carregar() {
     nome: i.nome,
     posicao: i.setor?.ordem ?? 1,
     unidade: i.unidade_contagem_padrao ?? '',
+    alimento: i.eh_alimento,
     oculto: i.oculto_contagem,
   }));
 
@@ -99,6 +100,13 @@ function render() {
     inputUn.addEventListener('input', () => marcarPendencia(ing, 'unidade', inputUn.value));
     tdUnidade.appendChild(inputUn);
 
+    const tdAlimento = document.createElement('td');
+    const inputAlimento = document.createElement('input');
+    inputAlimento.type = 'checkbox';
+    inputAlimento.checked = pend.alimento ?? ing.alimento;
+    inputAlimento.addEventListener('change', () => marcarPendencia(ing, 'alimento', inputAlimento.checked));
+    tdAlimento.appendChild(inputAlimento);
+
     const tdOculto = document.createElement('td');
     const inputOculto = document.createElement('input');
     inputOculto.type = 'checkbox';
@@ -106,7 +114,7 @@ function render() {
     inputOculto.addEventListener('change', () => marcarPendencia(ing, 'oculto', inputOculto.checked));
     tdOculto.appendChild(inputOculto);
 
-    tr.append(tdCodigo, tdNome, tdPosicao, tdUnidade, tdOculto);
+    tr.append(tdCodigo, tdNome, tdPosicao, tdUnidade, tdAlimento, tdOculto);
     tbody.appendChild(tr);
   }
 }
@@ -150,6 +158,7 @@ salvarBtn.addEventListener('click', async () => {
     const update = {};
     if (pend.nome !== undefined) update.nome = pend.nome;
     if (pend.unidade !== undefined) update.unidade_contagem_padrao = pend.unidade || null;
+    if (pend.alimento !== undefined) update.eh_alimento = pend.alimento;
     if (pend.oculto !== undefined) update.oculto_contagem = pend.oculto;
 
     try {

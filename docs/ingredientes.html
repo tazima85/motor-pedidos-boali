@@ -15,9 +15,11 @@
 
   <div class="page">
     <p class="hint">
-      Edite nome, posição (setor), unidade de contagem, e marque "Ocultar" pra tirar o item da tela de
-      Contagem de Estoque (ele continua valendo pra receita/pedido). Toque no cabeçalho de uma coluna
-      pra ordenar. Nada é salvo até tocar em "Salvar alterações".
+      Edite nome, posição (setor), unidade de contagem, marque "Ocultar" pra tirar o item da tela de
+      Contagem de Estoque (ele continua valendo pra receita/pedido), e marque/desmarque "Alimento" pra
+      corrigir a classificação automática que define se o item aparece como opção de ingrediente bruto
+      na tela de Desperdício. Toque no cabeçalho de uma coluna pra ordenar. Nada é salvo até tocar em
+      "Salvar alterações".
     </p>
 
     <button class="primary" id="salvar-btn" disabled>Salvar alterações</button>
@@ -28,11 +30,12 @@
     <div style="overflow-x:auto;">
       <table style="table-layout: fixed; width: 100%;">
         <colgroup>
-          <col style="width: 20%;" />
-          <col style="width: 38%;" />
+          <col style="width: 16%;" />
+          <col style="width: 30%;" />
+          <col style="width: 12%;" />
+          <col style="width: 15%;" />
           <col style="width: 14%;" />
-          <col style="width: 18%;" />
-          <col style="width: 10%;" />
+          <col style="width: 13%;" />
         </colgroup>
         <thead>
           <tr>
@@ -40,6 +43,7 @@
             <th data-key="nome">Nome <span class="arrow"></span></th>
             <th data-key="posicao">Posição <span class="arrow"></span></th>
             <th data-key="unidade">Unidade <span class="arrow"></span></th>
+            <th data-key="alimento">Alimento <span class="arrow"></span></th>
             <th data-key="oculto">Ocultar <span class="arrow"></span></th>
           </tr>
         </thead>

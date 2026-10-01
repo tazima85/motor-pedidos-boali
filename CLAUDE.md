@@ -47,6 +47,17 @@ an incident worth reading before running `git add -A` again in this repo).
   `pedido.html`, not on every "Calcular" — an exploratory calculation the user never turns into a PDF
   isn't a real decision worth logging. Includes an unfilled `quantidade_pedida_real` column, an explicit
   hook for the accuracy-validation backlog item the original spec asked to leave room for, not to build.
+- `supabase/migrations/20260813120000_eh_alimento_ingredientes.sql` — adds `ingredientes.eh_alimento`
+  (`boolean not null default true`), separate from both `ativo` and `oculto_contagem`: the PDF catalog
+  import (below) mixes real food/drink with descartáveis, embalagens, utensílios, and cleaning products
+  (`LUVA DESC`, `GUARDANAPO 40X15`, `KAY-5 SANITIZANTE`, etc.) — losing a glove isn't ingredient waste,
+  so `desperdicio.html`'s "ingrediente_bruto" dropdown now also filters `eh_alimento = true`. The ~149
+  catalog rows are classified by a `codigo_fornecedor`-keyed `update` in `supabase/seed.sql` (same
+  by-match pattern as `receita_opcoes_variaveis.padrao`, not a blind insert) — 42 non-food rows set
+  `false`, verified against the real hosted project: `42 false / 107 true`, summing to the full 149.
+  `ingredientes.html` got a matching "Alimento" checkbox column (same batch-save `pendencias` pattern as
+  "Ocultar") since this is a first-pass heuristic classification by product name, same caveat as
+  `unidade_contagem_padrao` — expect a few items to need manual correction.
 - `supabase/seed.sql` — real end-to-end data for the Frango Crocante validation: ingrediente "Frango
   Crocante" (Comfrio code `0101013100300`, `FRANGO EMPANADISSIMO CX4KG`, 1 caixa = 10 pacotes × 400g),
   the prato "Wrap Frango Picante" (the only dish where Frango Crocante is a Proteína-group option), a
@@ -263,14 +274,19 @@ was actually asked for.
   is silently skipped, same failure mode as everywhere else `padrao` is used. This *replaced* an earlier
   version with one `<select>` per grupo that let the user pick — removed on request, not layered on top.
   For an ingrediente bruto, the unit dropdown is built from that ingrediente's real `unidades_conversao`
-  rows plus its `unidade_base`. Below the
+  rows plus its `unidade_base`. The ingrediente dropdown itself is filtered to `ativo = true`,
+  `oculto_contagem = false`, **and now also `eh_alimento = true`** (migration
+  `20260813120000_eh_alimento_ingredientes.sql`) — per explicit user request, waste on a raw ingredient
+  should only be logged against real food/drink, not descartáveis/embalagens/produtos de limpeza that
+  also live in the catalog. Below the
   form, a table lists the loja's last 10 `registros_desperdicio` (data, item — prato or ingrediente name,
   whichever is set — quantidade+unidade, motivo mapped to a readable label), refreshed on page load and
   again right after a successful submit.
 - `ingredientes.html` / `js/ingredientes.js` — catalog edit screen. Sortable/filterable table of every
-  active ingrediente with inline-editable nome, posição, unidade de contagem, and an "Ocultar" checkbox.
-  Columns use a `<colgroup>` with percentage widths + `table-layout: fixed` (20/38/14/18/10% —
-  código/nome/posição/unidade/ocultar), not per-input pixel widths. **This replaced a first attempt that
+  active ingrediente with inline-editable nome, posição, unidade de contagem, an "Alimento" checkbox
+  (`eh_alimento` — drives the `desperdicio.html` filter above), and an "Ocultar" checkbox.
+  Columns use a `<colgroup>` with percentage widths + `table-layout: fixed` (16/30/12/15/14/13% —
+  código/nome/posição/unidade/alimento/ocultar), not per-input pixel widths. **This replaced a first attempt that
   set the nome `<input>` to a fixed `320px`** — on a normal ~480px mobile viewport that pushed
   posição/unidade/ocultar off-screen entirely (not just needing a scroll — the user reported them as
   simply gone). Confirmed fixed by resizing the test window to 390px wide and checking

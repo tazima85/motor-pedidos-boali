@@ -446,6 +446,60 @@ where not exists (
 );
 
 -- ----------------------------------------------------------------------------
+-- Classificação alimento/não-alimento do catálogo acima (migração 0013).
+-- UPDATE por código, não um default que já nasce certo pra tudo — mesmo
+-- padrão usado pra `receita_opcoes_variaveis.padrao`. Idempotente (UPDATE
+-- simples). Descartáveis, embalagens, utensílios e produtos de limpeza
+-- identificados pelo nome do item no catálogo real.
+-- ----------------------------------------------------------------------------
+
+update ingredientes set eh_alimento = false
+where codigo_fornecedor in (
+  '0101013100240', -- COLHER MESA OGMA 6
+  '0101013100000', -- BOBINA PLAST PIC 20X30
+  '0101013100232', -- BOBINA TERMICA BOALI
+  '0101013100369', -- CANUDO BIO 10MM
+  '0101013100290', -- COPO 330 ML BOALI
+  '0101013100203', -- COPO 440ML BOALI
+  '0101013100105', -- ETIQUETA BROWNIE
+  '0101013100106', -- ETIQUETA COOKIE
+  '0101013100103', -- ETIQUETA DELIVERY
+  '0101013100102', -- ETIQUETA VALIDADE
+  '0101013100318', -- ETIQUETAS CHIPS
+  '0101013100250', -- FOLHA DUOFRESH
+  '0101013100144', -- GARRAFA PET 500 ML
+  '0101013100116', -- GUARDANAPO 40X15
+  '0101013100117', -- LAMINA WRAP LIS
+  '0101013100003', -- LUVA DESC
+  '0101013100004', -- PANO MULTIUSO
+  '0101013100005', -- PAPEL TOALHA BRANCO
+  '0101013100342', -- PORTA TALHER 25X7CM
+  '0101013100401', -- POTE P/ MOLHOS BOALI 60ML
+  '0101013100006', -- REDE CABELO PRETA
+  '0101013100007', -- ROLO FILME PVC 40CM
+  '0101013100008', -- SACO COOKIE E PROT
+  '0101013100349', -- SACO G BOALI
+  '0101013100009', -- SACO LIXO PRETO 200LT
+  '0101013100343', -- SACO M BOALI
+  '0101013100363', -- TAMPA COPO 440ML
+  '0101013100346', -- BOWL BOALI 1L
+  '0101013100347', -- BOWL BOALI 500ML
+  '0101013100345', -- CAIXA WRAP BOALI
+  '0101013100243', -- FACA CHURR OGMA 6
+  '0101013100241', -- GARFO MESA OGMA 6
+  '0101013100350', -- PAPEL BANDEJA
+  '0101013100352', -- TAMPA BOWL 1L
+  '0101013100351', -- TAMPA BOWL 500 ML
+  '0101013100002', -- ESPONJA DUPLA FACE
+  '0101013100357', -- GEL HIGIENIZADOR 4X500ML
+  '0101013100042', -- KAY OV LIMP FORNO TURB 1LT
+  '0101013100355', -- KAY QSR DET CONCENT SP BB 2L
+  '0101013100353', -- KAY QSR VIDRO E MULTIUSO BB 2L
+  '0101013100041', -- KAY-5 SANITIZANTE
+  '0101013100356'  -- QSR SAB LIQ ANTISSEPT 4X500ML
+);
+
+-- ----------------------------------------------------------------------------
 -- Verificação manual (não faz parte do seed — só para conferir o resultado):
 --
 -- -- estoque atual de Frango Crocante convertido para a unidade base (g)
