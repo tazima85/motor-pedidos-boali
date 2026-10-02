@@ -178,3 +178,27 @@ td input {
 .hidden {
   display: none !important;
 }
+
+.ultima-contagem-linha {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: #fff;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #1c1c1c;
+}
+
+.ultima-contagem-linha button {
+  width: auto;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #1f7a3d;
+  background: #fff;
+  border: 1px solid #1f7a3d;
+  border-radius: 8px;
+  white-space: nowrap;
+}

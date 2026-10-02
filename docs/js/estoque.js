@@ -10,6 +10,7 @@ const msg = document.getElementById('msg');
 const pdfConfirm = document.getElementById('pdf-confirm');
 const pdfSimBtn = document.getElementById('pdf-sim-btn');
 const pdfNaoBtn = document.getElementById('pdf-nao-btn');
+const ultimasContagensDiv = document.getElementById('ultimas-contagens');
 
 let loja = null;
 let ingredientes = [];        // { id, nome, unidade, posicao }
@@ -55,6 +56,7 @@ async function carregar() {
   }));
 
   render();
+  await carregarUltimasContagens();
 }
 
 function sortIngredientes() {
@@ -127,7 +129,7 @@ document.querySelectorAll('th[data-key]').forEach((th) => {
   });
 });
 
-function gerarPdf(hoje, quantidadesSalvas) {
+function gerarPdf(dataContagem, quantidadesSalvas) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
   let y = 15;
@@ -136,7 +138,7 @@ function gerarPdf(hoje, quantidadesSalvas) {
   doc.text(`Contagem de Estoque — ${loja?.nome ?? ''}`, 14, y);
   y += 6;
   doc.setFontSize(10);
-  doc.text(`Data: ${hoje.split('-').reverse().join('/')}`, 14, y);
+  doc.text(`Data: ${dataContagem.split('-').reverse().join('/')}`, 14, y);
   y += 10;
 
   doc.setFontSize(11);
@@ -172,8 +174,62 @@ function gerarPdf(hoje, quantidadesSalvas) {
   const blobUrl = doc.output('bloburl');
   const pdfWindow = window.open(blobUrl, '_blank');
   if (!pdfWindow) {
-    doc.save(`contagem-estoque-${hoje}.pdf`);
+    doc.save(`contagem-estoque-${dataContagem}.pdf`);
   }
+}
+
+// Agrupa contagens_estoque por created_at exato: um "Salvar Contagem" insere
+// várias linhas de uma vez, todas com o mesmo now() (mesma instrução SQL), o
+// que torna created_at idêntico a chave natural de "uma contagem" — inclusive
+// distinguindo duas contagens no mesmo dia (recontagem), que têm a mesma
+// `data` mas created_at diferentes.
+async function carregarUltimasContagens() {
+  if (!loja) return;
+
+  const { data, error } = await supabase
+    .from('contagens_estoque')
+    .select('data, created_at, ingrediente_id, quantidade')
+    .eq('loja_id', loja.id)
+    .order('created_at', { ascending: false })
+    .limit(600);
+
+  if (error) {
+    ultimasContagensDiv.innerHTML = `<div class="error">Erro ao carregar: ${error.message}</div>`;
+    return;
+  }
+
+  const sessoesPorChave = new Map();
+  for (const row of data) {
+    if (!sessoesPorChave.has(row.created_at)) {
+      sessoesPorChave.set(row.created_at, { data: row.data, created_at: row.created_at, quantidades: {} });
+    }
+    sessoesPorChave.get(row.created_at).quantidades[row.ingrediente_id] = row.quantidade;
+  }
+
+  const ultimasTres = [...sessoesPorChave.values()].slice(0, 3);
+
+  if (!ultimasTres.length) {
+    ultimasContagensDiv.innerHTML = 'Nenhuma contagem registrada ainda.';
+    return;
+  }
+
+  ultimasContagensDiv.innerHTML = '';
+  ultimasTres.forEach((sessao) => {
+    const dataFmt = sessao.data.split('-').reverse().join('/');
+    const horaFmt = new Date(sessao.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const nItens = Object.keys(sessao.quantidades).length;
+
+    const linha = document.createElement('div');
+    linha.className = 'ultima-contagem-linha';
+    linha.innerHTML = `<span>${dataFmt} às ${horaFmt} — ${nItens} item(ns)</span> `;
+
+    const btn = document.createElement('button');
+    btn.textContent = 'Gerar PDF desta contagem';
+    btn.addEventListener('click', () => gerarPdf(sessao.data, sessao.quantidades));
+    linha.appendChild(btn);
+
+    ultimasContagensDiv.appendChild(linha);
+  });
 }
 
 saveBtn.addEventListener('click', async () => {
@@ -218,6 +274,7 @@ saveBtn.addEventListener('click', async () => {
   for (const key of Object.keys(quantidades)) delete quantidades[key];
   saveBtn.disabled = true;
   render();
+  carregarUltimasContagens();
 });
 
 pdfSimBtn.addEventListener('click', () => {

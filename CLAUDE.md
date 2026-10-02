@@ -232,17 +232,30 @@ was actually asked for.
 - `index.html` — post-login menu with five entries.
 - `estoque.html` / `js/estoque.js` — Módulo 4 UI. Fetches active, non-`oculto_contagem` `ingredientes`
   (joined to `setores` for posição), renders a client-side-sortable table (click any header to toggle
-  asc/desc — the spec's explicit requirement), one numeric input per row. **Single button**, "Salvar
-  Contagem e Gerar PDF" — originally two separate buttons (save, and a blank-sheet PDF), merged into one
-  on request. On click: bulk-inserts into `contagens_estoque` first; only if that succeeds does it
-  generate the PDF (jsPDF via CDN, `<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/...">`, loaded
-  as a plain non-module script so it attaches `window.jspdf` for the module script to read) — a snapshot
-  of `quantidades` is taken at the top of the click handler, before the object gets cleared post-save, so
-  the PDF reflects what was actually typed. The PDF is now **filled with the values just counted**, not
-  a blank sheet: each row prints the typed number in the Contagem column when present, falling back to a
-  blank line (the original behavior) for any item not filled in this round. Falls back to `unidade_base`
-  for any ingrediente that doesn't have `unidade_contagem_padrao` set yet (some catalog items still
-  don't, post-PDF-import).
+  asc/desc — the spec's explicit requirement), one numeric input per row. "Salvar Contagem" bulk-inserts
+  into `contagens_estoque` first; only on success does it ask (Sim/Não) whether to also generate the PDF
+  — split into two steps because opening the PDF in a new tab on iOS Safari only works from a real,
+  unchained user tap, and awaiting the save first breaks that gesture chain. A snapshot of `quantidades`
+  is taken at the top of the click handler, before the object gets cleared post-save, so the PDF reflects
+  what was actually typed. The PDF (jsPDF via CDN, `<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/...">`,
+  loaded as a plain non-module script so it attaches `window.jspdf` for the module script to read) is
+  **filled with the values just counted**, not a blank sheet: each row prints the typed number in the
+  Contagem column when present, falling back to a blank line for any item not filled in this round.
+  Falls back to `unidade_base` for any ingrediente that doesn't have `unidade_contagem_padrao` set yet
+  (some catalog items still don't, post-PDF-import).
+  **"Últimas contagens"** (added on request): below the save button, lists the last 3 contagem sessions
+  for the loja with a "Gerar PDF desta contagem" button each, reusing the same `gerarPdf()` used for a
+  fresh save. A "contagem" here is all `contagens_estoque` rows sharing the exact same `created_at` — a
+  single bulk insert always writes one literal `now()` for every row in the batch (same SQL statement),
+  so grouping by `created_at` cleanly separates sessions even same-day recounts (same `data`, different
+  `created_at`). Query pulls the loja's last 600 rows ordered by `created_at desc` and groups client-side
+  (no server-side DISTINCT-session query); 600 comfortably covers 3 full-catalog saves (currently ~104
+  active non-oculto items per save) without needing a second round trip. Regenerating an old session's
+  PDF still renders every *currently* active ingrediente (like a fresh save does), filling in that
+  session's historical quantities where they match and leaving a blank line for the rest — so the sheet
+  can look different from what was printed at the time if the catalog changed since (items
+  added/hidden/renamed). Verified live: 3 real sessions rendered correctly (104/1/1 items), and calling
+  the regenerate button for a historical session ran `gerarPdf()` with no errors.
 - `vendas.html` / `js/vendas.js` — Módulo 5 UI. Parses an uploaded `.xlsx` client-side via SheetJS
   (`https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs`, also CDN-loaded, no npm dep). Matches columns
   by **header text** (`PLU`, first `Nome`, exact `Qtd` — not `Qtd %`, `Valor total`, `Desconto`,
